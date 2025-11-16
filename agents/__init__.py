@@ -1,5 +1,5 @@
 """
-Agents 模块
+医生 Agent 模块
 """
 from .base_agent import BaseAgent
 from .doctor_agent import DoctorAgent

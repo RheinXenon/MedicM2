@@ -22,8 +22,8 @@ wheels/
 
 # Virtual Environment
 venv/
-env/
 ENV/
+env/
 
 # IDE
 .vscode/
@@ -32,27 +32,30 @@ ENV/
 *.swo
 *~
 
-# Environment Variables
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment variables
 .env
 
 # ChromaDB
 chroma_db/
+*.db
 
-# Output Files
-*.json
-!config/*.json
-diagnosis_*.json
+# Logs
 *.log
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Jupyter Notebook
-.ipynb_checkpoints
+# Streamlit
+.streamlit/
 
-# pytest
-.pytest_cache/
+# Diagnosis results
+diagnosis_result_*.json
+diagnosis_summary_*.txt
 
-# mypy
-.mypy_cache/
+# Cache
+*.cache
+logs

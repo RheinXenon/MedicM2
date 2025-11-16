@@ -1,5 +1,5 @@
 """
-专科医生 Agent
+专科医生 Agent - 增强版，包含详细思考过程
 """
 from typing import Dict, List
 from .base_agent import BaseAgent
@@ -7,7 +7,7 @@ from utils.prompt_templates import DOCTOR_DIAGNOSIS_TEMPLATE, CASE_INFO_TEMPLATE
 
 
 class DoctorAgent(BaseAgent):
-    """专科医生 Agent"""
+    """专科医生 Agent - 增强版"""
     
     def __init__(
         self, 
@@ -45,17 +45,34 @@ class DoctorAgent(BaseAgent):
         Returns:
             (是否相关, 相关度分数)
         """
+        self.add_thinking_step(
+            "相关性分析",
+            f"开始分析病例与{self.department_name}的相关性..."
+        )
+        
         # 提取病例中的所有文本信息
         case_text = self._extract_case_text(case_data)
         case_text_lower = case_text.lower()
         
         # 计算关键词匹配度
-        keyword_matches = sum(
-            1 for keyword in self.keywords 
+        matched_keywords = [
+            keyword for keyword in self.keywords 
             if keyword.lower() in case_text_lower
-        )
+        ]
         
+        keyword_matches = len(matched_keywords)
         relevance_score = keyword_matches / len(self.keywords) if self.keywords else 0
+        
+        # 记录相关性分析结果
+        self.add_thinking_step(
+            "相关性结果",
+            f"匹配到 {keyword_matches} 个关键词，相关度评分: {relevance_score:.2f}",
+            {
+                "matched_keywords": matched_keywords,
+                "total_keywords": len(self.keywords),
+                "relevance_score": relevance_score
+            }
+        )
         
         # 如果相关度超过阈值，认为相关
         is_relevant = relevance_score > 0.1 or keyword_matches >= 2
@@ -100,34 +117,78 @@ class DoctorAgent(BaseAgent):
             case_data: 病例数据
             
         Returns:
-            诊断结果字典
+            诊断结果字典（包含思考过程）
         """
+        # 清空之前的思考过程
+        self.clear_thinking_process()
+        
+        self.add_thinking_step(
+            "开始诊断",
+            f"{self.name} 开始对病例进行分析..."
+        )
+        
         # 1. 检查相关性
         is_relevant, relevance_score = self.is_relevant(case_data)
         
         if not is_relevant:
+            self.add_thinking_step(
+                "诊断结论",
+                f"病例与{self.department_name}相关度较低，未发现明显相关症状"
+            )
+            
             return {
                 'department': self.department_name,
                 'department_id': self.department_id,
                 'is_relevant': False,
                 'relevance_score': relevance_score,
                 'diagnosis': f"根据病例描述，暂未发现明显的{self.department_name}相关症状和体征。",
-                'confidence': 'low'
+                'confidence': 'low',
+                'thinking_process': self.get_thinking_process()
             }
         
         # 2. 格式化病例信息
+        self.add_thinking_step(
+            "病例整理",
+            "正在整理和格式化病例信息..."
+        )
         case_text = self._format_case_info(case_data)
         
         # 3. 检索相关知识
+        self.add_thinking_step(
+            "知识检索",
+            "正在从专业知识库中检索相关内容..."
+        )
+        
         query = self._generate_retrieval_query(case_data)
+        self.add_thinking_step(
+            "检索查询",
+            f"检索查询: {query}"
+        )
+        
         retrieved_docs = self.retriever.retrieve(
             query=query,
             department_id=self.department_id,
             top_k=5
         )
+        
+        self.add_thinking_step(
+            "检索结果",
+            f"成功检索到 {len(retrieved_docs)} 条相关专业知识",
+            {
+                "retrieved_count": len(retrieved_docs),
+                "sources": [doc.get('metadata', {}).get('source', 'unknown') 
+                           for doc in retrieved_docs]
+            }
+        )
+        
         knowledge_context = self.retriever.format_retrieved_knowledge(retrieved_docs)
         
         # 4. 构建诊断提示词
+        self.add_thinking_step(
+            "准备诊断",
+            "基于病例信息和专业知识，准备生成诊断意见..."
+        )
+        
         prompt = DOCTOR_DIAGNOSIS_TEMPLATE.format(
             department_name=self.department_name,
             specialties='、'.join(self.specialties[:5]),
@@ -140,6 +201,11 @@ class DoctorAgent(BaseAgent):
         
         diagnosis_text = self.generate_response(prompt, system_message)
         
+        self.add_thinking_step(
+            "诊断完成",
+            f"{self.name} 完成诊断分析"
+        )
+        
         # 6. 返回结果
         return {
             'department': self.department_name,
@@ -148,7 +214,8 @@ class DoctorAgent(BaseAgent):
             'relevance_score': relevance_score,
             'diagnosis': diagnosis_text,
             'confidence': self._assess_confidence(relevance_score),
-            'retrieved_knowledge': retrieved_docs
+            'retrieved_knowledge': retrieved_docs,
+            'thinking_process': self.get_thinking_process()
         }
     
     def _format_case_info(self, case_data: Dict) -> str:

@@ -1,5 +1,5 @@
 """
-会诊 Agent - 综合各科室意见给出最终诊断
+会诊 Agent - 增强版，包含详细思考过程
 """
 import os
 from typing import Dict, List
@@ -8,7 +8,7 @@ from utils.prompt_templates import CONSULTATION_SUMMARY_TEMPLATE, CASE_INFO_TEMP
 
 
 class ConsultationAgent(BaseAgent):
-    """会诊专家 Agent"""
+    """会诊专家 Agent - 增强版"""
     
     def __init__(self, **kwargs):
         """初始化会诊 Agent"""
@@ -38,21 +38,58 @@ class ConsultationAgent(BaseAgent):
             department_diagnoses: 各科室的诊断结果列表
             
         Returns:
-            会诊结果字典
+            会诊结果字典（包含思考过程）
         """
+        # 清空之前的思考过程
+        self.clear_thinking_process()
+        
+        self.add_thinking_step(
+            "开始会诊",
+            "多学科会诊专家开始综合分析各科室意见..."
+        )
+        
         # 1. 格式化病例信息
+        self.add_thinking_step(
+            "整理病例",
+            "正在整理患者病例信息..."
+        )
         case_text = self._format_case_info(case_data)
         
-        # 2. 格式化各科室诊断意见
+        # 2. 分析各科室诊断意见
+        relevant_departments = [
+            d for d in department_diagnoses 
+            if d.get('is_relevant', False)
+        ]
+        
+        self.add_thinking_step(
+            "科室意见分析",
+            f"收到 {len(department_diagnoses)} 个科室的诊断意见，其中 {len(relevant_departments)} 个科室发现相关症状",
+            {
+                "total_departments": len(department_diagnoses),
+                "relevant_departments": len(relevant_departments),
+                "department_names": [d['department'] for d in relevant_departments]
+            }
+        )
+        
+        # 3. 格式化各科室诊断意见
+        self.add_thinking_step(
+            "整合诊断意见",
+            "正在整合和格式化各科室的诊断意见..."
+        )
         diagnoses_text = self._format_department_diagnoses(department_diagnoses)
         
-        # 3. 构建会诊提示词
+        # 4. 构建会诊提示词
+        self.add_thinking_step(
+            "准备会诊报告",
+            "基于所有科室的意见，准备生成综合会诊报告..."
+        )
+        
         prompt = CONSULTATION_SUMMARY_TEMPLATE.format(
             case_info=case_text,
             department_diagnoses=diagnoses_text
         )
         
-        # 4. 生成会诊报告
+        # 5. 生成会诊报告
         system_message = (
             "你是一位经验丰富的会诊专家，擅长综合分析各科室意见，"
             "给出准确的诊断结论和合理的治疗方案。你的决策基于循证医学，"
@@ -61,11 +98,10 @@ class ConsultationAgent(BaseAgent):
         
         consultation_report = self.generate_response(prompt, system_message)
         
-        # 5. 分析参与科室
-        relevant_departments = [
-            d for d in department_diagnoses 
-            if d.get('is_relevant', False)
-        ]
+        self.add_thinking_step(
+            "会诊完成",
+            "多学科会诊报告生成完毕"
+        )
         
         # 6. 返回结果
         return {
@@ -75,7 +111,8 @@ class ConsultationAgent(BaseAgent):
             ],
             'total_departments_consulted': len(relevant_departments),
             'all_diagnoses': department_diagnoses,
-            'case_summary': case_text
+            'case_summary': case_text,
+            'thinking_process': self.get_thinking_process()
         }
     
     def _format_case_info(self, case_data: Dict) -> str:

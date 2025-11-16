@@ -1,5 +1,5 @@
 """
-智能多模态医疗诊断系统 - 主程序
+智能多模态医疗诊断系统 - 核心系统类
 """
 import os
 import json
@@ -27,28 +27,22 @@ class MedicalDiagnosisSystem:
         Args:
             config_path: 科室配置文件路径
         """
-        print("=" * 80)
-        print("智能多模态医疗诊断系统")
-        print("=" * 80)
-        print()
-        
         # 加载科室配置
         self.departments = self._load_departments(config_path)
-        print(f"✓ 已加载 {len(self.departments)} 个科室配置")
         
         # 初始化向量存储
         self.vector_store = VectorStore(persist_directory="./chroma_db")
         
-        # 初始化知识库
-        knowledge_base_path = "./knowledge_base"
-        self.vector_store.initialize_all_departments(
-            knowledge_base_path, 
-            self.departments
-        )
+        # 初始化知识库（使用A1的知识库）
+        knowledge_base_path = "../A1/knowledge_base"
+        if os.path.exists(knowledge_base_path):
+            self.vector_store.initialize_all_departments(
+                knowledge_base_path, 
+                self.departments
+            )
         
         # 初始化检索器
         self.retriever = KnowledgeRetriever(self.vector_store)
-        print("✓ 知识检索系统已就绪")
         
         # 初始化医生 Agents
         self.doctor_agents = []
@@ -58,21 +52,14 @@ class MedicalDiagnosisSystem:
                 retriever=self.retriever
             )
             self.doctor_agents.append(agent)
-        print(f"✓ 已初始化 {len(self.doctor_agents)} 个专科医生 Agent")
         
         # 初始化会诊 Agent
         self.consultation_agent = ConsultationAgent()
-        print("✓ 会诊系统已就绪")
         
         # 初始化多模态处理器
         self.multimodal_processor = MultimodalProcessor()
-        print("✓ 多模态处理系统已就绪")
         
-        print()
-        print("=" * 80)
-        print("系统初始化完成，可以开始诊断")
-        print("=" * 80)
-        print()
+        self.is_initialized = True
     
     def _load_departments(self, config_path: str) -> List[Dict]:
         """加载科室配置"""
@@ -83,7 +70,8 @@ class MedicalDiagnosisSystem:
     def diagnose(
         self, 
         case_data: Dict,
-        include_images: bool = True
+        include_images: bool = True,
+        progress_callback=None
     ) -> Dict:
         """
         对病例进行诊断
@@ -91,51 +79,54 @@ class MedicalDiagnosisSystem:
         Args:
             case_data: 病例数据字典
             include_images: 是否处理图像数据
+            progress_callback: 进度回调函数
             
         Returns:
             完整的诊断结果
         """
-        print("\n" + "=" * 80)
-        print("开始诊断流程")
-        print("=" * 80 + "\n")
+        if progress_callback:
+            progress_callback("开始诊断流程...", 0)
         
         # 1. 处理多模态输入（如果有图像）
         if include_images and 'images' in case_data and case_data['images']:
-            print("正在分析医学影像...")
+            if progress_callback:
+                progress_callback("正在分析医学影像...", 5)
+            
             enhanced_case = self.multimodal_processor.prepare_case_with_images(
                 case_data,
                 IMAGE_ANALYSIS_TEMPLATE
             )
-            print("✓ 影像分析完成\n")
         else:
             enhanced_case = case_data
         
         # 2. 各科室医生独立诊断
-        print("正在进行多科室诊断...")
-        department_diagnoses = []
+        if progress_callback:
+            progress_callback("正在进行多科室诊断...", 10)
         
-        for i, agent in enumerate(self.doctor_agents, 1):
-            print(f"  [{i}/{len(self.doctor_agents)}] {agent.name} 正在诊断...")
+        department_diagnoses = []
+        total_agents = len(self.doctor_agents)
+        
+        for i, agent in enumerate(self.doctor_agents):
+            if progress_callback:
+                progress = 10 + int((i + 1) / total_agents * 60)
+                progress_callback(f"[{i+1}/{total_agents}] {agent.name} 正在诊断...", progress)
             
             diagnosis = agent.diagnose(enhanced_case)
             department_diagnoses.append(diagnosis)
-            
-            if diagnosis['is_relevant']:
-                print(f"      ✓ {agent.name} 发现相关症状 (相关度: {diagnosis['relevance_score']:.2f})")
-            else:
-                print(f"      - {agent.name} 未发现明显相关症状")
-        
-        print("\n✓ 多科室诊断完成\n")
         
         # 3. 会诊汇总
-        print("正在进行会诊汇总...")
+        if progress_callback:
+            progress_callback("正在进行会诊汇总...", 80)
+        
         consultation_result = self.consultation_agent.consult(
             enhanced_case,
             department_diagnoses
         )
-        print("✓ 会诊汇总完成\n")
         
         # 4. 组合最终结果
+        if progress_callback:
+            progress_callback("生成最终报告...", 95)
+        
         final_result = {
             'case_data': enhanced_case,
             'department_diagnoses': department_diagnoses,
@@ -143,20 +134,14 @@ class MedicalDiagnosisSystem:
             'summary': self.consultation_agent.generate_summary(consultation_result)
         }
         
-        print("=" * 80)
-        print("诊断流程完成")
-        print("=" * 80 + "\n")
+        if progress_callback:
+            progress_callback("诊断完成!", 100)
         
         return final_result
     
-    def print_diagnosis(self, result: Dict):
-        """
-        打印诊断结果
-        
-        Args:
-            result: 诊断结果字典
-        """
-        print(result['summary'])
+    def get_department_names(self) -> List[str]:
+        """获取所有科室名称"""
+        return [dept['name'] for dept in self.departments]
     
     def save_diagnosis(self, result: Dict, output_path: str):
         """
@@ -176,62 +161,3 @@ class MedicalDiagnosisSystem:
         
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(serializable_result, f, ensure_ascii=False, indent=2)
-        
-        print(f"诊断结果已保存到: {output_path}")
-
-
-def main():
-    """主函数 - 示例用法"""
-    
-    # 初始化系统
-    system = MedicalDiagnosisSystem()
-    
-    # 示例病例1：疑似急性冠脉综合征
-    case1 = {
-        "patient_info": {
-            "age": 55,
-            "gender": "男",
-            "chief_complaint": "持续胸痛3天，伴有呼吸困难"
-        },
-        "symptoms": [
-            "胸部中央压榨性疼痛",
-            "疼痛放射到左臂和下颌",
-            "呼吸急促",
-            "大汗淋漓",
-            "恶心"
-        ],
-        "medical_history": [
-            "高血压10年",
-            "糖尿病5年",
-            "吸烟史30年",
-            "高脂血症"
-        ],
-        "vital_signs": {
-            "血压": "160/95 mmHg",
-            "心率": "102次/分",
-            "体温": "37.2°C",
-            "血氧饱和度": "94%",
-            "呼吸频率": "22次/分"
-        }
-    }
-    
-    print("\n" + "=" * 80)
-    print("示例病例：疑似急性冠脉综合征")
-    print("=" * 80)
-    
-    # 执行诊断
-    result1 = system.diagnose(case1, include_images=False)
-    
-    # 打印结果
-    system.print_diagnosis(result1)
-    
-    # 保存结果
-    system.save_diagnosis(result1, "./diagnosis_result_case1.json")
-    
-    print("\n" + "=" * 80)
-    print("示例运行完成")
-    print("=" * 80)
-
-
-if __name__ == "__main__":
-    main()

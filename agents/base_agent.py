@@ -1,8 +1,9 @@
 """
-Agent 基类
+Agent 基类 - 增强版，包含思考过程记录
 """
 import os
-from typing import Dict, Optional
+import time
+from typing import Dict, Optional, List
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -10,7 +11,7 @@ load_dotenv()
 
 
 class BaseAgent:
-    """Agent 基类"""
+    """Agent 基类 - 增强版"""
     
     def __init__(
         self, 
@@ -41,6 +42,34 @@ class BaseAgent:
         
         self.max_retries = int(os.getenv("MAX_RETRIES", 3))
         self.timeout = int(os.getenv("TIMEOUT", 60))
+        
+        # 思考过程记录
+        self.thinking_process = []
+    
+    def add_thinking_step(self, step_name: str, content: str, metadata: Dict = None):
+        """
+        添加思考步骤
+        
+        Args:
+            step_name: 步骤名称
+            content: 步骤内容
+            metadata: 元数据
+        """
+        step = {
+            'step_name': step_name,
+            'content': content,
+            'timestamp': time.time(),
+            'metadata': metadata or {}
+        }
+        self.thinking_process.append(step)
+    
+    def clear_thinking_process(self):
+        """清空思考过程记录"""
+        self.thinking_process = []
+    
+    def get_thinking_process(self) -> List[Dict]:
+        """获取思考过程记录"""
+        return self.thinking_process
     
     def generate_response(
         self, 
@@ -70,7 +99,15 @@ class BaseAgent:
             "content": prompt
         })
         
+        # 记录请求
+        self.add_thinking_step(
+            "LLM请求",
+            f"正在向{self.model}发送请求...",
+            {"system_message": system_message[:100] if system_message else None}
+        )
+        
         try:
+            start_time = time.time()
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -78,12 +115,42 @@ class BaseAgent:
                 timeout=self.timeout
             )
             
-            return response.choices[0].message.content
+            end_time = time.time()
+            
+            # 检查响应是否有效
+            if not response or not response.choices:
+                error_msg = "API返回了空响应"
+                self.add_thinking_step("错误", error_msg)
+                print(error_msg)
+                return f"无法生成诊断意见：{error_msg}"
+            
+            response_text = response.choices[0].message.content
+            
+            # 检查content是否为None
+            if response_text is None:
+                error_msg = "API返回的content为None"
+                self.add_thinking_step("错误", error_msg)
+                print(error_msg)
+                return "无法生成诊断意见：API返回了空内容"
+            
+            # 记录响应
+            self.add_thinking_step(
+                "LLM响应",
+                f"收到回复（耗时 {end_time - start_time:.2f}秒）",
+                {
+                    "response_length": len(response_text),
+                    "model": self.model,
+                    "temperature": self.temperature
+                }
+            )
+            
+            return response_text
         
         except Exception as e:
             error_msg = f"生成回复失败: {str(e)}"
+            self.add_thinking_step("错误", error_msg)
             print(error_msg)
-            return error_msg
+            return f"无法生成诊断意见：{error_msg}"
     
     def __str__(self):
         return f"{self.name} ({self.role})"
