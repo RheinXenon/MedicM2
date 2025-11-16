@@ -58,3 +58,4 @@ diagnosis_summary_*.txt
 
 # Cache
 *.cache
+logs
