@@ -170,17 +170,45 @@ streamlit run app.py
 
 ## 故障排除
 
-### 系统初始化失败
+### 测试API连接
+
+如果遇到"生成回复失败"或"NoneType"错误，请先测试API连接：
+
+```bash
+python test_api.py
+```
+
+这个脚本会检查：
+- API配置是否正确
+- API连接是否正常
+- 模型是否可用
+- 嵌入模型是否正常
+
+### 常见错误
+
+#### 1. "生成回复失败: 'NoneType' object is not subscriptable"
+**原因:** API返回了空响应或None
+**解决方法:**
+- 运行 `python test_api.py` 测试API
+- 检查.env文件中的配置：
+  - `OPENAI_API_KEY` 是否正确
+  - `OPENAI_API_BASE` 是否正确
+  - `OPENAI_MODEL` 是否支持chat.completions格式
+- 确认API余额充足
+- 检查网络连接
+
+#### 2. 系统初始化失败
 - 检查.env文件配置
 - 确认A1的knowledge_base文件夹存在
 - 查看控制台错误信息
 
-### 诊断失败
+#### 3. 诊断失败
 - 检查API密钥是否有效
 - 确认网络连接正常
 - 查看详细错误信息
+- 检查模型是否支持所需功能
 
-### 页面显示异常
+#### 4. 页面显示异常
 - 刷新浏览器页面
 - 清除浏览器缓存
 - 重启Streamlit应用

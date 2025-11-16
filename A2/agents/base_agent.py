@@ -116,7 +116,22 @@ class BaseAgent:
             )
             
             end_time = time.time()
+            
+            # 检查响应是否有效
+            if not response or not response.choices:
+                error_msg = "API返回了空响应"
+                self.add_thinking_step("错误", error_msg)
+                print(error_msg)
+                return f"无法生成诊断意见：{error_msg}"
+            
             response_text = response.choices[0].message.content
+            
+            # 检查content是否为None
+            if response_text is None:
+                error_msg = "API返回的content为None"
+                self.add_thinking_step("错误", error_msg)
+                print(error_msg)
+                return "无法生成诊断意见：API返回了空内容"
             
             # 记录响应
             self.add_thinking_step(
@@ -135,7 +150,7 @@ class BaseAgent:
             error_msg = f"生成回复失败: {str(e)}"
             self.add_thinking_step("错误", error_msg)
             print(error_msg)
-            return error_msg
+            return f"无法生成诊断意见：{error_msg}"
     
     def __str__(self):
         return f"{self.name} ({self.role})"
