@@ -34,6 +34,10 @@ if 'treatment_history' not in st.session_state:
     st.session_state.treatment_history = []
 if 'initialized' not in st.session_state:
     st.session_state.initialized = False
+if 'current_treatment' not in st.session_state:
+    st.session_state.current_treatment = None
+if 'treatment_steps' not in st.session_state:
+    st.session_state.treatment_steps = []
 
 
 def initialize_hospital():
@@ -60,6 +64,224 @@ def initialize_hospital():
     
     except Exception as e:
         return False, f"❌ 初始化失败：{str(e)}"
+
+
+def display_treatment_step(step_name, status, details=None, icon="🔄"):
+    """显示治疗流程的一个步骤"""
+    if status == "pending":
+        st.markdown(f"⚪ **{step_name}** - 等待中")
+    elif status == "running":
+        st.markdown(f"🔵 **{step_name}** - 进行中...")
+        if details:
+            with st.expander("查看详情", expanded=True):
+                st.write(details)
+    elif status == "completed":
+        st.markdown(f"✅ **{step_name}** - 已完成")
+        if details:
+            with st.expander("查看详情"):
+                st.write(details)
+    elif status == "error":
+        st.markdown(f"❌ **{step_name}** - 失败")
+        if details:
+            with st.expander("查看详情"):
+                st.error(details)
+
+
+def treat_single_patient_with_visualization(patient, hospital):
+    """单个病人治疗流程，带实时可视化"""
+    # 创建治疗流程容器
+    st.subheader(f"🏥 正在治疗: {patient.name}")
+    st.markdown(f"**真实疾病**: {patient.disease}")
+    st.divider()
+    
+    # 创建流程步骤的占位符
+    step1 = st.empty()
+    step2 = st.empty()
+    step3 = st.empty()
+    step4 = st.empty()
+    step5 = st.empty()
+    step6 = st.empty()
+    step7 = st.empty()
+    step8 = st.empty()
+    
+    treatment_record = {
+        'patient_id': patient.patient_id,
+        'patient_name': patient.name,
+        'ground_truth_disease': patient.disease,
+        'events': []
+    }
+    
+    try:
+        # 步骤1: 疾病发作
+        with step1.container():
+            st.markdown("🔵 **步骤1: 病例输入** - 进行中...")
+            with st.expander("查看详情", expanded=True):
+                st.write(f"**病人姓名**: {patient.name}")
+                st.write(f"**年龄**: {patient.age}岁")
+                st.write(f"**性别**: {patient.gender}")
+                st.write(f"**主诉症状**: {', '.join(patient.symptoms[:5])}")
+        import time
+        time.sleep(0.5)
+        
+        with step1.container():
+            st.markdown("✅ **步骤1: 病例输入** - 已完成")
+            with st.expander("查看详情"):
+                st.write(f"**病人姓名**: {patient.name}")
+                st.write(f"**年龄**: {patient.age}岁")
+                st.write(f"**性别**: {patient.gender}")
+                st.write(f"**主诉症状**: {', '.join(patient.symptoms[:5])}")
+        
+        # 步骤2: 分诊
+        with step2.container():
+            st.markdown("🔵 **步骤2: 智能分诊** - 进行中...")
+            with st.expander("查看详情", expanded=True):
+                st.write("护士正在分析症状...")
+        
+        triage_result = hospital.triage_nurse.triage(patient)
+        treatment_record['triage'] = triage_result
+        recommended_dept = triage_result['recommended_departments'][0]
+        
+        with step2.container():
+            st.markdown("✅ **步骤2: 智能分诊** - 已完成")
+            with st.expander("查看详情"):
+                st.success(f"**推荐科室**: {recommended_dept}")
+                st.write(f"**分诊理由**: {triage_result.get('reasoning', '基于症状分析')}")
+        
+        # 步骤3: 挂号
+        with step3.container():
+            st.markdown("✅ **步骤3: 挂号登记** - 已完成")
+            with st.expander("查看详情"):
+                st.write(f"已挂号至 **{recommended_dept}**")
+        
+        # 获取医生
+        if recommended_dept not in hospital.doctor_agents:
+            recommended_dept = list(hospital.doctor_agents.keys())[0]
+        doctor = hospital.doctor_agents[recommended_dept]
+        
+        # 步骤4: 问诊
+        with step4.container():
+            st.markdown("🔵 **步骤4: 医生问诊** - 进行中...")
+            with st.expander("查看详情", expanded=True):
+                st.write(f"**主治医生**: {doctor.name} ({recommended_dept})")
+                st.write("医生正在询问病史和症状...")
+        
+        examination_types = hospital._determine_examinations(patient, doctor)
+        
+        with step4.container():
+            st.markdown("✅ **步骤4: 医生问诊** - 已完成")
+            with st.expander("查看详情"):
+                st.write(f"**主治医生**: {doctor.name} ({recommended_dept})")
+                st.write(f"**需要检查**: {', '.join(examination_types)}")
+        
+        # 步骤5: 医学检查
+        with step5.container():
+            st.markdown("🔵 **步骤5: 医学检查** - 进行中...")
+            with st.expander("查看详情", expanded=True):
+                st.write("正在进行各项检查...")
+        
+        examination_results = {}
+        for exam_type in examination_types:
+            exam_result = hospital.examination_nurse.conduct_examination(patient, exam_type)
+            examination_results[exam_type] = exam_result
+        
+        treatment_record['examinations'] = examination_results
+        
+        with step5.container():
+            st.markdown("✅ **步骤5: 医学检查** - 已完成")
+            with st.expander("查看详情"):
+                for exam_type, result in examination_results.items():
+                    st.write(f"**{exam_type}**: {result.get('result', '正常')}")
+        
+        # 步骤6: AI诊断
+        with step6.container():
+            st.markdown("🔵 **步骤6: AI智能诊断** - 进行中...")
+            with st.expander("查看详情", expanded=True):
+                st.write("大模型正在分析病情...")
+                st.write("检索相似病例...")
+                st.write("应用临床经验...")
+        
+        diagnosis_result = doctor.diagnose_with_evolution(patient, examination_results)
+        treatment_record['diagnosis'] = diagnosis_result
+        
+        with step6.container():
+            st.markdown("✅ **步骤6: AI智能诊断** - 已完成")
+            with st.expander("查看详情"):
+                diagnosed_disease = diagnosis_result.get('disease', '未知')
+                confidence = diagnosis_result.get('confidence', 'unknown')
+                st.success(f"**诊断结果**: {diagnosed_disease}")
+                st.write(f"**置信度**: {confidence}")
+                reasoning = diagnosis_result.get('reasoning', '')
+                if reasoning:
+                    st.write(f"**诊断依据**: {reasoning[:200]}...")
+        
+        patient.receive_diagnosis(diagnosis_result)
+        
+        # 步骤7: 治疗方案
+        with step7.container():
+            st.markdown("🔵 **步骤7: 制定治疗方案** - 进行中...")
+            with st.expander("查看详情", expanded=True):
+                st.write("正在制定治疗方案...")
+        
+        treatment_plan = diagnosis_result.get('treatment_plan', {})
+        patient.receive_treatment(treatment_plan)
+        
+        with step7.container():
+            st.markdown("✅ **步骤7: 制定治疗方案** - 已完成")
+            with st.expander("查看详情"):
+                medications = treatment_plan.get('medications', [])
+                if medications:
+                    st.write(f"**处方药物**: {', '.join(medications[:5])}")
+                recommendations = treatment_plan.get('recommendations', [])
+                if recommendations:
+                    st.write(f"**医嘱**: {', '.join(recommendations[:3])}")
+        
+        # 步骤8: 康复评估
+        with step8.container():
+            st.markdown("🔵 **步骤8: 康复评估** - 进行中...")
+            with st.expander("查看详情", expanded=True):
+                st.write("评估治疗效果...")
+        
+        treatment_outcome = patient.evaluate_treatment_outcome()
+        treatment_record['outcome'] = treatment_outcome
+        
+        with step8.container():
+            if treatment_outcome['is_recovered']:
+                st.markdown("✅ **步骤8: 康复评估** - 已完成")
+                with st.expander("查看详情"):
+                    st.success("🎉 **治疗成功！病人已康复**")
+                    if treatment_outcome['is_diagnosis_correct']:
+                        st.success("✅ 诊断正确")
+                    else:
+                        st.warning(f"⚠️ 诊断有误")
+                        st.write(f"错误诊断: {diagnosis_result.get('disease')}")
+                        st.write(f"正确诊断: {patient.disease}")
+            else:
+                st.markdown("⚠️ **步骤8: 康复评估** - 需要复诊")
+                with st.expander("查看详情"):
+                    st.warning("治疗效果不佳，建议复诊")
+                    if treatment_outcome['is_diagnosis_correct']:
+                        st.info("诊断正确，但需要调整治疗方案")
+                    else:
+                        st.error("诊断错误")
+                        st.write(f"错误诊断: {diagnosis_result.get('disease')}")
+                        st.write(f"正确诊断: {patient.disease}")
+        
+        # 医生学习
+        doctor.learn_from_treatment_outcome(patient, diagnosis_result, treatment_outcome)
+        
+        # 更新统计
+        hospital._update_stats(recommended_dept, treatment_outcome['is_recovered'])
+        
+        treatment_record['success'] = True
+        return treatment_record
+        
+    except Exception as e:
+        import traceback
+        st.error(f"治疗过程出错: {str(e)}")
+        st.code(traceback.format_exc())
+        treatment_record['success'] = False
+        treatment_record['error'] = str(e)
+        return treatment_record
 
 
 def generate_and_treat_patient(num_patients, department_filter):
@@ -89,25 +311,13 @@ def generate_and_treat_patient(num_patients, department_filter):
         else:
             patients = patient_gen.generate_batch_patients(num_patients)
         
-        # 批量治疗
-        log = f"🏥 开始治疗 {len(patients)} 位病人...\n\n"
-        
-        # 创建进度条
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
+        # 逐个治疗病人，带可视化
         for i, patient in enumerate(patients, 1):
-            # 更新进度
-            progress = i / len(patients)
-            progress_bar.progress(progress)
-            status_text.text(f"正在治疗病人 {i}/{len(patients)}: {patient.name}")
+            st.markdown(f"---")
+            st.markdown(f"### 🏥 病人 {i}/{len(patients)}")
             
-            log += f"【病人 {i}/{len(patients)}】\n"
-            log += f"姓名：{patient.name}\n"
-            log += f"疾病：{patient.disease}\n"
-            
-            # 治疗
-            record = hospital.simulate_patient_treatment(patient, verbose=False)
+            # 使用可视化治疗
+            record = treat_single_patient_with_visualization(patient, hospital)
             
             # 记录到历史
             st.session_state.treatment_history.append({
@@ -118,26 +328,9 @@ def generate_and_treat_patient(num_patients, department_filter):
                 'success': record.get('outcome', {}).get('is_recovered', False),
                 'diagnosis_correct': record.get('outcome', {}).get('is_diagnosis_correct', False)
             })
-            
-            # 显示结果
-            outcome = record.get('outcome', {})
-            if outcome.get('is_recovered'):
-                log += "结果：✅ 治疗成功\n"
-            else:
-                log += "结果：❌ 治疗失败\n"
-            
-            if outcome.get('is_diagnosis_correct'):
-                log += "诊断：✅ 正确\n"
-            else:
-                log += f"诊断：❌ 错误 (诊断为: {record.get('diagnosis', {}).get('disease', '未知')})\n"
-            
-            log += "-" * 50 + "\n\n"
         
-        progress_bar.empty()
-        status_text.empty()
-        log += f"\n✅ 批量治疗完成！"
-        
-        return log
+        st.success(f"\n✅ 批量治疗完成！共治疗 {len(patients)} 位病人")
+        return "completed"
     
     except Exception as e:
         import traceback
@@ -343,19 +536,18 @@ with st.sidebar:
     
     # 治疗设置
     st.subheader("生成并治疗病人")
-    num_patients = st.slider("病人数量", min_value=1, max_value=20, value=5, step=1)
+    num_patients = st.slider("病人数量", min_value=1, max_value=20, value=1, step=1, key='num_patients')
     department_filter = st.selectbox(
         "科室筛选",
-        ["全部", "心脏科", "神经科", "肿瘤科", "呼吸科", "消化科"]
+        ["全部", "心脏科", "神经科", "肿瘤科", "呼吸科", "消化科"],
+        key='department_filter'
     )
     
     if st.button("🏥 开始治疗", type="primary", use_container_width=True):
         if not st.session_state.initialized:
             st.warning("⚠️ 请先初始化系统")
         else:
-            with st.spinner("正在治疗..."):
-                log = generate_and_treat_patient(num_patients, department_filter)
-                st.session_state.treatment_log = log
+            st.session_state.start_treatment = True
     
     st.divider()
     
@@ -380,7 +572,7 @@ with st.sidebar:
 
 # 主内容区域
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📝 治疗日志", 
+    "🎯 治疗流程", 
     "📊 实时统计", 
     "📚 病例库", 
     "🧠 经验库", 
@@ -388,16 +580,35 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 ])
 
 with tab1:
-    st.subheader("实时治疗过程")
-    if 'treatment_log' in st.session_state:
-        st.text_area(
-            "治疗日志",
-            value=st.session_state.treatment_log,
-            height=400,
-            label_visibility="collapsed"
-        )
+    st.subheader("🎯 实时治疗流程可视化")
+    st.markdown("""
+    该界面将实时展示每个病人的完整治疗流程，包括：
+    1. 📝 **病例输入** - 病人基本信息和症状
+    2. 🎯 **智能分诊** - AI护士分析症状并推荐科室
+    3. 📝 **挂号登记** - 完成就诊登记
+    4. 👨‍⚕️ **医生问诊** - 主治医生询问病史并安排检查
+    5. 🔬 **医学检查** - 进行各项医学检验
+    6. 🧠 **AI智能诊断** - 大模型分析病情并给出诊断
+    7. 💊 **治疗方案** - 制定个性化治疗方案
+    8. 🎉 **康复评估** - 评估治疗效果
+    """)
+    st.divider()
+    
+    # 检查是否需要开始治疗
+    if 'start_treatment' in st.session_state and st.session_state.start_treatment:
+        st.session_state.start_treatment = False  # 重置标志
+        
+        # 生成并治疗病人
+        hospital = st.session_state.hospital
+        patient_gen = st.session_state.patient_gen
+        
+        # 获取侧边栏的设置
+        num_patients = st.session_state.get('num_patients', 1)
+        department_filter = st.session_state.get('department_filter', '全部')
+        
+        result = generate_and_treat_patient(num_patients, department_filter)
     else:
-        st.info("点击'开始治疗'查看治疗日志")
+        st.info("👉 请在侧边栏选择病人数量和科室，然后点击'开始治疗'按钮启动治疗流程")
 
 with tab2:
     st.subheader("医院统计信息")
