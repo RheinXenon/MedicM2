@@ -168,8 +168,6 @@ def treat_single_patient_with_visualization(patient, hospital):
                 st.write(f"**年龄**: {patient.age}岁")
                 st.write(f"**性别**: {patient.gender}")
                 st.write(f"**主诉症状**: {', '.join(patient.symptoms[:5])}")
-        import time
-        time.sleep(0.5)
         
         with step1.container():
             st.markdown("✅ **步骤1: 病例输入** - 已完成")
@@ -363,10 +361,19 @@ def generate_and_treat_patient(num_patients, department_filter):
         else:
             patients = patient_gen.generate_batch_patients(num_patients)
         
+        # 创建进度提示和实时统计显示
+        progress_text = st.empty()
+        progress_bar = st.progress(0)
+        stats_display = st.empty()
+        
         # 逐个治疗病人，带可视化
         for i, patient in enumerate(patients, 1):
             st.markdown(f"---")
             st.markdown(f"### 🏥 病人 {i}/{len(patients)}")
+            
+            # 更新进度
+            progress_text.text(f"正在治疗第 {i}/{len(patients)} 位病人...")
+            progress_bar.progress((i - 1) / len(patients))
             
             # 使用可视化治疗
             record = treat_single_patient_with_visualization(patient, hospital)
@@ -392,6 +399,40 @@ def generate_and_treat_patient(num_patients, department_filter):
                 st.session_state.all_time_stats['diagnosis_correct'] += 1
             else:
                 st.session_state.all_time_stats['diagnosis_incorrect'] += 1
+            
+            # 更新实时统计显示
+            current_stats = st.session_state.all_time_stats
+            success_rate = (current_stats['successful_treatments'] / current_stats['total_patients'] * 100) if current_stats['total_patients'] > 0 else 0
+            diagnosis_rate = (current_stats['diagnosis_correct'] / current_stats['total_patients'] * 100) if current_stats['total_patients'] > 0 else 0
+            
+            stats_display.info(f"""
+            **📊 实时统计**  
+            已治疗: {current_stats['total_patients']} 人 | 
+            成功率: {success_rate:.1f}% | 
+            诊断准确率: {diagnosis_rate:.1f}%
+            """)
+        
+        # 更新进度到100%
+        progress_text.text(f"✅ 全部完成！共治疗 {len(patients)} 位病人")
+        progress_bar.progress(1.0)
+        
+        # 显示最终统计
+        final_stats = st.session_state.all_time_stats
+        final_success_rate = (final_stats['successful_treatments'] / final_stats['total_patients'] * 100) if final_stats['total_patients'] > 0 else 0
+        final_diagnosis_rate = (final_stats['diagnosis_correct'] / final_stats['total_patients'] * 100) if final_stats['total_patients'] > 0 else 0
+        
+        stats_display.success(f"""
+        **🎉 治疗完成！最终统计**  
+        已治疗: {final_stats['total_patients']} 人 | 
+        成功率: {final_success_rate:.1f}% | 
+        诊断准确率: {final_diagnosis_rate:.1f}%  
+        
+        💡 现在可以切换到其他标签页查看详细的统计、病例库和经验库数据
+        """)
+        
+        # 清除进度提示
+        progress_text.empty()
+        progress_bar.empty()
         
         st.success(f"\n✅ 批量治疗完成！共治疗 {len(patients)} 位病人")
         return "completed"
@@ -689,11 +730,25 @@ with tab1:
         department_filter = st.session_state.get('department_filter', '全部')
         
         result = generate_and_treat_patient(num_patients, department_filter)
+        # 治疗完成后提示用户可以查看其他标签页
+        st.success("✅ 治疗流程完成！现在可以点击其他标签页查看统计、病例库和经验库的最新数据")
     else:
         st.info("👉 请在侧边栏选择病人数量和科室，然后点击'开始治疗'按钮启动治疗流程")
+        st.markdown("""
+        **注意：**
+        - 治疗过程中，其他标签页仍然可以正常查看
+        - 治疗完成后，点击其他标签页的刷新按钮可查看最新数据
+        """)
 
 with tab2:
-    st.subheader("医院统计信息")
+    col_header1, col_header2 = st.columns([6, 1])
+    with col_header1:
+        st.subheader("医院统计信息")
+    with col_header2:
+        if st.button("🔄 刷新", key="refresh_stats", use_container_width=True, help="点击刷新最新数据"):
+            st.rerun()
+    
+    st.info("💡 提示：治疗过程中，点击刷新按钮可查看最新统计数据")
     
     # 显示历史统计数据
     st.markdown("### 📈 历史总体统计")
@@ -743,7 +798,15 @@ with tab2:
             st.info("暂无治疗记录")
 
 with tab3:
-    st.subheader("病例库详情")
+    col_header1, col_header2 = st.columns([6, 1])
+    with col_header1:
+        st.subheader("病例库详情")
+    with col_header2:
+        if st.button("🔄 刷新", key="refresh_case_tab", use_container_width=True, help="点击刷新最新病例数据"):
+            st.rerun()
+    
+    st.info("💡 提示：治疗过程中，点击刷新按钮可查看最新病例数据")
+    
     case_info = get_case_base_info()
     st.markdown(case_info)
     
@@ -796,12 +859,17 @@ with tab3:
     else:
         st.info("病例库为空，请先治疗病人")
     
-    st.divider()
-    if st.button("🔄 刷新病例库", key="refresh_case"):
-        st.rerun()
 
 with tab4:
-    st.subheader("经验库详情")
+    col_header1, col_header2 = st.columns([6, 1])
+    with col_header1:
+        st.subheader("经验库详情")
+    with col_header2:
+        if st.button("🔄 刷新", key="refresh_exp_tab", use_container_width=True, help="点击刷新最新经验数据"):
+            st.rerun()
+    
+    st.info("💡 提示：治疗过程中，点击刷新按钮可查看最新经验规则")
+    
     exp_info = get_experience_base_info()
     st.markdown(exp_info)
     
@@ -872,13 +940,10 @@ with tab4:
     else:
         st.info("经验库为空，当医生出现误诊时会自动生成规则")
     
-    st.divider()
-    if st.button("🔄 刷新经验库", key="refresh_exp"):
-        st.rerun()
 
 with tab5:
     st.markdown("""
-## 使用指南
+## 📖 使用指南
 
 ### 1️⃣ 初始化系统
 点击侧边栏的"初始化系统"按钮，系统将：
