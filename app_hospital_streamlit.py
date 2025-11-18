@@ -438,8 +438,204 @@ def treat_single_patient_with_card(patient, hospital):
         return treatment_record
 
 
+def treat_single_patient_with_realtime_card(patient, hospital, card_container):
+    """
+    单个病人治疗流程，带实时卡片更新
+    在治疗过程中动态更新进度条状态
+    """
+    from frontend.components.patient_card import generate_interactive_card_html
+    
+    treatment_record = {
+        'patient_id': patient.patient_id,
+        'patient_name': patient.name,
+        'ground_truth_disease': patient.disease,
+        'events': []
+    }
+    
+    # 初始化步骤数据
+    steps_data = [{} for _ in range(8)]
+    card_id = f"realtime_{patient.patient_id}"
+    
+    def update_card(current_step, steps_status):
+        """更新卡片显示"""
+        card_html = generate_interactive_card_html(
+            card_id,
+            patient.name,
+            "🔄 治疗进行中...",
+            "result-running",
+            "",
+            steps_status
+        )
+        with card_container:
+            components.html(card_html, height=400, scrolling=False)
+    
+    try:
+        # 步骤1: 病例输入
+        steps_status = []
+        steps_status.append({'status': 'running', 'data': {}})
+        for _ in range(7):
+            steps_status.append({'status': 'pending', 'data': {}})
+        update_card(0, steps_status)
+        
+        treatment_record['patient_info'] = {
+            'name': patient.name,
+            'age': patient.age,
+            'gender': patient.gender,
+            'symptoms': patient.symptoms,
+            'disease': patient.disease
+        }
+        steps_data[0] = treatment_record['patient_info']
+        steps_status[0] = {'status': 'completed', 'data': steps_data[0]}
+        update_card(0, steps_status)
+        
+        # 步骤2: 分诊
+        steps_status[1] = {'status': 'running', 'data': {}}
+        update_card(1, steps_status)
+        
+        triage_result = hospital.triage_nurse.triage(patient)
+        treatment_record['triage'] = triage_result
+        recommended_dept = triage_result['recommended_departments'][0]
+        
+        steps_data[1] = {
+            'department': recommended_dept,
+            'reasoning': triage_result.get('reasoning', '基于症状分析')
+        }
+        steps_status[1] = {'status': 'completed', 'data': steps_data[1]}
+        update_card(1, steps_status)
+        
+        # 步骤3: 挂号登记
+        steps_status[2] = {'status': 'running', 'data': {}}
+        update_card(2, steps_status)
+        
+        if recommended_dept not in hospital.doctor_agents:
+            recommended_dept = list(hospital.doctor_agents.keys())[0]
+        doctor = hospital.doctor_agents[recommended_dept]
+        
+        treatment_record['department'] = recommended_dept
+        treatment_record['doctor_name'] = doctor.name
+        
+        steps_data[2] = {'department': recommended_dept}
+        steps_status[2] = {'status': 'completed', 'data': steps_data[2]}
+        update_card(2, steps_status)
+        
+        # 步骤4: 问诊
+        steps_status[3] = {'status': 'running', 'data': {}}
+        update_card(3, steps_status)
+        
+        examination_types = hospital._determine_examinations(patient, doctor)
+        
+        steps_data[3] = {
+            'doctor_name': doctor.name,
+            'department': recommended_dept,
+            'examinations': examination_types
+        }
+        steps_status[3] = {'status': 'completed', 'data': steps_data[3]}
+        update_card(3, steps_status)
+        
+        # 步骤5: 医学检查
+        steps_status[4] = {'status': 'running', 'data': {}}
+        update_card(4, steps_status)
+        
+        examination_results = {}
+        for exam_type in examination_types:
+            exam_result = hospital.examination_nurse.conduct_examination(patient, exam_type)
+            examination_results[exam_type] = exam_result
+        
+        treatment_record['examinations'] = examination_results
+        steps_data[4] = {'results': examination_results}
+        steps_status[4] = {'status': 'completed', 'data': steps_data[4]}
+        update_card(4, steps_status)
+        
+        # 步骤6: AI诊断
+        steps_status[5] = {'status': 'running', 'data': {}}
+        update_card(5, steps_status)
+        
+        diagnosis_result = doctor.diagnose_with_evolution(patient, examination_results)
+        treatment_record['diagnosis'] = diagnosis_result
+        patient.receive_diagnosis(diagnosis_result)
+        
+        steps_data[5] = diagnosis_result
+        steps_status[5] = {'status': 'completed', 'data': steps_data[5]}
+        update_card(5, steps_status)
+        
+        # 步骤7: 治疗方案
+        steps_status[6] = {'status': 'running', 'data': {}}
+        update_card(6, steps_status)
+        
+        treatment_plan = diagnosis_result.get('treatment_plan', {})
+        patient.receive_treatment(treatment_plan)
+        treatment_record['treatment'] = treatment_plan
+        
+        steps_data[6] = treatment_plan
+        steps_status[6] = {'status': 'completed', 'data': steps_data[6]}
+        update_card(6, steps_status)
+        
+        # 步骤8: 康复评估
+        steps_status[7] = {'status': 'running', 'data': {}}
+        update_card(7, steps_status)
+        
+        treatment_outcome = patient.evaluate_treatment_outcome()
+        treatment_record['outcome'] = treatment_outcome
+        
+        # 医生学习
+        doctor.learn_from_treatment_outcome(patient, diagnosis_result, treatment_outcome)
+        
+        # 更新统计
+        hospital._update_stats(recommended_dept, treatment_outcome['is_recovered'])
+        
+        # 确定最终状态
+        is_recovered = treatment_outcome.get('is_recovered', False)
+        is_diagnosis_correct = treatment_outcome.get('is_diagnosis_correct', False)
+        
+        steps_data[7] = {
+            'is_recovered': is_recovered,
+            'is_diagnosis_correct': is_diagnosis_correct,
+            'diagnosed_disease': diagnosis_result.get('disease', '未知'),
+            'correct_disease': patient.disease
+        }
+        
+        final_status = 'completed' if is_recovered else 'failed'
+        steps_status[7] = {'status': final_status, 'data': steps_data[7]}
+        
+        # 最终更新 - 显示完整的治疗结果
+        if is_recovered:
+            result_text = '✅ 治疗成功'
+            result_class = 'result-success'
+        else:
+            result_text = '❌ 需要复诊'
+            result_class = 'result-failed'
+        
+        diagnosis_text = '✅ 诊断正确' if is_diagnosis_correct else '❌ 诊断错误'
+        
+        final_card_html = generate_interactive_card_html(
+            card_id,
+            patient.name,
+            result_text,
+            result_class,
+            diagnosis_text,
+            steps_status
+        )
+        with card_container:
+            components.html(final_card_html, height=600, scrolling=False)
+        
+        treatment_record['success'] = True
+        return treatment_record
+        
+    except Exception as e:
+        import traceback
+        treatment_record['success'] = False
+        treatment_record['error'] = str(e)
+        treatment_record['error_trace'] = traceback.format_exc()
+        
+        # 显示错误状态
+        steps_status[min(len(steps_status)-1, 5)] = {'status': 'failed', 'data': {'error': str(e)}}
+        update_card(5, steps_status)
+        
+        return treatment_record
+
+
 def generate_and_treat_patient(num_patients, department_filter):
-    """生成病人并进行治疗（使用卡片形式展示）"""
+    """生成病人并进行治疗（使用卡片形式展示，支持实时更新）"""
     hospital = st.session_state.hospital
     patient_gen = st.session_state.patient_gen
     
@@ -465,19 +661,24 @@ def generate_and_treat_patient(num_patients, department_filter):
         else:
             patients = patient_gen.generate_batch_patients(num_patients)
         
-        # 显示治疗进度
+        # 显示总体进度
         progress_bar = st.progress(0)
         status_text = st.empty()
         
-        # 逐个治疗病人（静默执行）
+        # 创建一个实时卡片显示区域（只显示当前正在治疗的患者）
+        realtime_card_container = st.empty()
+        
+        # 逐个治疗病人（实时显示卡片）
         completed_records = []
         for i, patient in enumerate(patients, 1):
             status_text.text(f"正在治疗第 {i}/{len(patients)} 位患者：{patient.name}...")
-            progress_bar.progress(i / len(patients))
             
-            # 使用静默治疗函数
-            record = treat_single_patient_with_card(patient, hospital)
+            # 使用实时卡片治疗函数（使用同一个容器，这样每次都会替换之前的内容）
+            record = treat_single_patient_with_realtime_card(patient, hospital, realtime_card_container)
             completed_records.append(record)
+            
+            # 更新进度条
+            progress_bar.progress(i / len(patients))
             
             # 记录到历史
             treatment_record = {
@@ -501,9 +702,10 @@ def generate_and_treat_patient(num_patients, department_filter):
             else:
                 st.session_state.all_time_stats['diagnosis_incorrect'] += 1
         
-        # 清除进度条
+        # 清除进度条和实时卡片容器
         progress_bar.empty()
         status_text.empty()
+        realtime_card_container.empty()
         
         # 保存完成的治疗记录
         st.session_state.completed_treatments = completed_records
