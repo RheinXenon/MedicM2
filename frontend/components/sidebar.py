@@ -21,6 +21,12 @@ def render_sidebar():
         # 初始化按钮 - 已初始化或正在初始化时禁用
         button_disabled = st.session_state.initialized or st.session_state.initializing
         if st.button("🚀 初始化系统", type="primary", use_container_width=True, disabled=button_disabled):
+            # 先设置状态标志，让按钮立即禁用
+            st.session_state.initializing = True
+            st.rerun()
+        
+        # 检测初始化状态并执行初始化
+        if st.session_state.initializing and not st.session_state.initialized:
             # 不使用 spinner，因为 initialize_hospital() 内部有详细的进度显示
             success, message = initialize_hospital()
             if success:
