@@ -240,9 +240,13 @@ def treat_single_patient_with_visualization(patient, hospital):
                 medications = treatment_plan.get('medications', [])
                 if medications:
                     st.write(f"**处方药物**: {', '.join(medications[:5])}")
-                recommendations = treatment_plan.get('recommendations', [])
+                recommendations = treatment_plan.get('recommendations', '')
                 if recommendations:
-                    st.write(f"**医嘱**: {', '.join(recommendations[:3])}")
+                    # 处理字符串或列表格式
+                    if isinstance(recommendations, str):
+                        st.write(f"**医嘱**: {recommendations}")
+                    elif isinstance(recommendations, list):
+                        st.write(f"**医嘱**: {', '.join(recommendations[:3])}")
         
         # 步骤8: 康复评估
         with step8.container():
