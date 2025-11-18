@@ -53,8 +53,8 @@ def render_patient_card(patient_index, treatment_record, unique_key):
         steps_status
     )
     
-    # 渲染卡片，使用较小的默认高度让卡片紧凑排列
-    components.html(card_html, height=280, scrolling=True)
+    # 渲染卡片，设置足够的高度空间（最高1000px），通过JavaScript动态调整实际高度
+    components.html(card_html, height=1000, scrolling=False)
 
 
 def generate_interactive_card_html(card_id, patient_name, result_text, result_class, diagnosis_text, steps_status):
@@ -74,6 +74,7 @@ def generate_interactive_card_html(card_id, patient_name, result_text, result_cl
     <html>
     <head>
         <meta charset="UTF-8">
+        <script src="https://cdn.jsdelivr.net/gh/streamlit/streamlit@1.28.0/component-lib/declarations/streamlit.d.ts"></script>
         <style>
             {get_card_styles()}
         </style>
@@ -127,7 +128,7 @@ def generate_step_nodes(card_id, steps_status):
         step_name = TREATMENT_STEPS[i]
         
         html += f"""
-        <div class="step" onclick="toggleStepDetails('{card_id}', {i})">
+        <div class="step" onclick="toggleStepDetails_{card_id}('{card_id}', {i})">
             <div class="step-node {status}" id="node_{card_id}_{i}">
                 <span class="step-emoji">{emoji}</span>
             </div>
@@ -151,14 +152,52 @@ def generate_javascript_code(card_id, steps_status):
         const stepsData_{card_id} = {steps_data_json};
         let currentOpenStep_{card_id} = -1;
         
+        // 动态调整iframe高度
+        function updateFrameHeight_{card_id}() {{
+            // 等待DOM更新和动画完成
+            setTimeout(() => {{
+                const card = document.getElementById('card_{card_id}');
+                if (!card) return;
+                
+                // 获取卡片的实际高度
+                const cardHeight = card.offsetHeight;
+                const bodyHeight = document.body.scrollHeight;
+                const finalHeight = Math.max(cardHeight, bodyHeight) + 40;
+                
+                // 通知Streamlit调整iframe高度
+                if (window.parent && window.parent.postMessage) {{
+                    window.parent.postMessage({{
+                        type: 'streamlit:setFrameHeight',
+                        height: finalHeight
+                    }}, '*');
+                }}
+                
+                // 同时尝试使用Streamlit对象（如果存在）
+                if (typeof Streamlit !== 'undefined' && Streamlit.setFrameHeight) {{
+                    Streamlit.setFrameHeight(finalHeight);
+                }}
+            }}, 200);  // 延长延迟确保动画完全完成
+        }}
+        
         // 初始化进度条
         const progressActive = document.getElementById('progress_active_{card_id}');
-        progressActive.style.width = '{progress_percent}%';
+        if (progressActive) {{
+            progressActive.style.width = '{progress_percent}%';
+        }}
+        
+        // 页面加载完成后设置初始高度
+        window.addEventListener('load', updateFrameHeight_{card_id});
         
         // 切换步骤详情
-        function toggleStepDetails(cardId, stepIndex) {{
+        function toggleStepDetails_{card_id}(cardId, stepIndex) {{
             const detailsContainer = document.getElementById('details_' + cardId);
             const detailsContent = document.getElementById('details_content_' + cardId);
+            
+            // 确保元素存在
+            if (!detailsContainer || !detailsContent) {{
+                console.error('Details container or content not found');
+                return;
+            }}
             
             // 如果点击的是当前打开的步骤，则关闭
             if (currentOpenStep_{card_id} === stepIndex) {{
@@ -169,6 +208,8 @@ def generate_javascript_code(card_id, steps_status):
                     const node = document.getElementById('node_' + cardId + '_' + i);
                     if (node) node.classList.remove('active');
                 }}
+                // 收起后更新高度
+                updateFrameHeight_{card_id}();
                 return;
             }}
             
@@ -190,14 +231,17 @@ def generate_javascript_code(card_id, steps_status):
             
             // 渲染步骤详情
             const stepData = stepsData_{card_id}[stepIndex];
-            detailsContent.innerHTML = renderStepDetails(stepIndex, stepData);
+            detailsContent.innerHTML = renderStepDetails_{card_id}(stepIndex, stepData);
             
             // 添加展开动画
             detailsContainer.style.animation = 'slideDown 0.3s ease';
+            
+            // 展开后更新高度
+            updateFrameHeight_{card_id}();
         }}
         
         // 渲染步骤详情内容
-        function renderStepDetails(stepIndex, stepData) {{
+        function renderStepDetails_{card_id}(stepIndex, stepData) {{
             const stepNames = {json.dumps(TREATMENT_STEPS, ensure_ascii=False)};
             const stepName = stepNames[stepIndex];
             
@@ -320,5 +364,5 @@ def render_realtime_patient_card(patient, current_step_index, steps_data):
         steps_status
     )
     
-    # 渲染卡片
-    components.html(card_html, height=280, scrolling=True)
+    # 渲染卡片，设置足够的高度空间（最高1000px），通过JavaScript动态调整实际高度
+    components.html(card_html, height=1000, scrolling=False)

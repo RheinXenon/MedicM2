@@ -467,7 +467,7 @@ def treat_single_patient_with_realtime_card(patient, hospital, card_container):
             steps_status
         )
         with card_container:
-            components.html(card_html, height=280, scrolling=True)
+            components.html(card_html, height=1000, scrolling=False)
     
     try:
         # 步骤1: 病例输入
@@ -616,7 +616,7 @@ def treat_single_patient_with_realtime_card(patient, hospital, card_container):
             steps_status
         )
         with card_container:
-            components.html(final_card_html, height=280, scrolling=True)
+            components.html(final_card_html, height=1000, scrolling=False)
         
         treatment_record['success'] = True
         return treatment_record

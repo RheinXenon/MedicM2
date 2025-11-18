@@ -304,6 +304,14 @@ def get_custom_css_inline():
         background: transparent;
         padding: 0;
         margin: 0;
+        min-height: auto;
+        height: auto;
+        overflow: visible;
+    }
+    
+    html {
+        height: auto;
+        min-height: auto;
     }
     
     /* 患者卡片样式 - 默认收起更紧凑 */
