@@ -6,23 +6,21 @@ from datetime import datetime
 import time
 
 
-def treat_single_patient_with_visualization(patient, hospital):
+def treat_single_patient_with_visualization(patient, hospital, real_time_placeholder):
     """单个病人治疗流程，带实时可视化"""
-    # 创建实时进度显示容器
-    progress_container = st.container()
-    
-    with progress_container:
+    # 使用传入的占位符创建实时进度显示容器
+    with real_time_placeholder.container():
         st.markdown(f"**🏥 正在治疗**: {patient.name} | **疾病**: {patient.disease}")
-    
-    # 创建流程步骤的占位符
-    step1 = st.empty()
-    step2 = st.empty()
-    step3 = st.empty()
-    step4 = st.empty()
-    step5 = st.empty()
-    step6 = st.empty()
-    step7 = st.empty()
-    step8 = st.empty()
+        
+        # 创建流程步骤的占位符（在容器内部）
+        step1 = st.empty()
+        step2 = st.empty()
+        step3 = st.empty()
+        step4 = st.empty()
+        step5 = st.empty()
+        step6 = st.empty()
+        step7 = st.empty()
+        step8 = st.empty()
     
     treatment_record = {
         'patient_id': patient.patient_id,
@@ -133,17 +131,9 @@ def treat_single_patient_with_visualization(patient, hospital):
         # 更新统计
         hospital._update_stats(recommended_dept, treatment_outcome['is_recovered'])
         
-        # 清空实时进度显示
+        # 清空实时进度显示（通过清空占位符）
         time.sleep(0.3)
-        progress_container.empty()
-        step1.empty()
-        step2.empty()
-        step3.empty()
-        step4.empty()
-        step5.empty()
-        step6.empty()
-        step7.empty()
-        step8.empty()
+        real_time_placeholder.empty()
         
         # 构建治疗结果记录
         is_diagnosis_correct = treatment_outcome['is_diagnosis_correct']
@@ -272,7 +262,19 @@ def treat_single_patient_with_visualization(patient, hospital):
         return treatment_record
 
 
-def generate_and_treat_patient(num_patients, department_filter):
+def update_completed_records(completed_records_placeholder):
+    """更新已完成的治疗记录显示"""
+    with completed_records_placeholder.container():
+        if st.session_state.completed_treatments_display:
+            st.caption(f"共 {len(st.session_state.completed_treatments_display)} 条记录")
+            # 按时间倒序显示（最新的在最上面）
+            for record in st.session_state.completed_treatments_display:
+                st.markdown(record, unsafe_allow_html=True)
+        else:
+            st.info("暂无完成的治疗记录")
+
+
+def generate_and_treat_patient(num_patients, department_filter, real_time_placeholder, completed_records_placeholder):
     """生成病人并进行治疗"""
     hospital = st.session_state.hospital
     patient_gen = st.session_state.patient_gen
@@ -301,8 +303,11 @@ def generate_and_treat_patient(num_patients, department_filter):
         
         # 逐个治疗病人，带可视化
         for i, patient in enumerate(patients, 1):
-            # 使用可视化治疗
-            record = treat_single_patient_with_visualization(patient, hospital)
+            # 使用可视化治疗，传递实时进度占位符
+            record = treat_single_patient_with_visualization(patient, hospital, real_time_placeholder)
+            
+            # 立即更新已完成的治疗记录显示
+            update_completed_records(completed_records_placeholder)
             
             # 记录到历史
             treatment_record = {
