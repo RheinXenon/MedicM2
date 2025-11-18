@@ -72,6 +72,14 @@ python example_usage.py
 
 ```
 Agent Hospital
+├── frontend/                    # 前端组件层 ✨ NEW
+│   ├── components/              # UI组件
+│   │   ├── progress_bar.py      # 横向进度条组件
+│   │   └── patient_card.py      # 患者卡片组件
+│   ├── styles/                  # 样式系统
+│   │   └── custom_css.py        # 自定义CSS样式
+│   ├── README.md                # 组件文档
+│   └── USAGE_EXAMPLE.md         # 使用示例
 ├── agents/                      # Agent层
 │   ├── patient_agent.py         # 病人Agent
 │   ├── nurse_agent.py          # 护士Agent（分诊+检查）
@@ -102,25 +110,37 @@ Agent Hospital
 
 启动 Web 界面后，您可以：
 
-### 1. 实时治疗观察
+### 1. 横向进度条展示 ✨ **全新设计**
+- 🎯 **8个步骤节点**：病例输入 → 智能分诊 → 挂号登记 → 医生问诊 → 医学检查 → AI诊断 → 治疗方案 → 康复评估
+- 🌈 **现代化卡片设计**：渐变背景、圆形节点、连接线组成完整进度条
+- 🎭 **动态状态展示**：
+  - ✅ 绿色脉冲动画 - 已完成步骤
+  - 🔵 蓝色脉冲动画 - 进行中步骤
+  - 🔴 红色抖动动画 - 失败步骤
+  - ⚪ 灰色 - 未执行步骤
+- 🔍 **详情展开**：点击查看每个步骤的详细信息
+- 📋 **批量展示**：支持同时显示多位患者的治疗卡片
+
+### 2. 实时治疗观察
 - 📝 查看完整的治疗日志
 - 🏥 观察8个事件的治疗流程
 - 👨‍⚕️ 看到每个Agent的决策过程
 
-### 2. 医生进化统计
+### 3. 医生进化统计
 - 📊 各科室医生表现对比
 - 📈 诊断准确率和治疗成功率
 - 🎯 实时更新的统计图表
 
-### 3. 知识库可视化
+### 4. 知识库可视化
 - 📚 病例库增长情况
 - 🧠 经验库规则详情
 - 🔍 按科室和疾病分类浏览
 
-### 4. 交互式操作
+### 5. 交互式操作
 - 🎛️ 调整病人数量和科室筛选
 - 💾 保存当前状态
-- �️ 清空知识库重新训练
+- 🗑️ 清空知识库重新训练
+- 📊 显示所有历史记录或最近记录
 
 ## �📊 运行示例
 
@@ -206,17 +226,25 @@ python RUN_AGENT_HOSPITAL.py
 
 | 文件 | 说明 |
 |------|------|
-| `app_hospital.py` | 🎨 **可视化Web界面** |
+| `app_hospital_streamlit.py` | 🎨 **可视化Web界面（Streamlit）** |
 | `start_hospital.py` | 🚀 启动脚本 |
 | `RUN_AGENT_HOSPITAL.py` | 命令行批量模拟 |
 | `test_agent_hospital.py` | 测试脚本 |
 | `example_usage.py` | 使用示例 |
+| **frontend/** | **前端组件目录 ✨** |
+| `frontend/components/progress_bar.py` | 横向进度条组件 |
+| `frontend/components/patient_card.py` | 患者卡片组件 |
+| `frontend/styles/custom_css.py` | 自定义CSS样式 |
+| **agents/** | **Agent层** |
 | `agents/patient_agent.py` | 病人Agent |
 | `agents/nurse_agent.py` | 护士Agent |
 | `agents/evolving_doctor_agent.py` | 医生Agent |
+| **knowledge/** | **知识层** |
 | `knowledge/medical_case_base.py` | 病例库 |
 | `knowledge/experience_base.py` | 经验库 |
+| **simulation/** | **模拟层** |
 | `simulation/agent_hospital.py` | 医院模拟器 |
+| `simulation/patient_generator.py` | 病人生成器 |
 
 ## 🎓 论文参考
 
@@ -241,4 +269,20 @@ Institute for AI Industry Research (AIR), Tsinghua University, 2024
 
 ---
 
-**版本**: 1.0 | **实现日期**: 2024-11-18 | **数据集**: CMeIEV2 (715疾病)
+**版本**: 2.0 ✨ | **实现日期**: 2024-11-18 | **数据集**: CMeIEV2 (715疾病)
+
+### 🎉 版本更新记录
+
+**v2.0 (2024-11-18)** - 前端界面全面升级
+- ✨ 新增横向进度条组件
+- 🎨 现代化患者卡片设计
+- 🎭 动态状态动画（脉冲、抖动）
+- 📁 模块化前端组件结构
+- 🔍 详情展开交互功能
+- 📊 批量患者卡片展示
+
+**v1.0 (2024-11-18)** - 初始版本
+- 🏥 完整的Agent Hospital系统
+- 🧠 医生进化学习机制
+- 📚 病例库和经验库
+- 🎨 基础Web可视化界面

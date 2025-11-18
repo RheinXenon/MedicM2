@@ -8,9 +8,14 @@ import sys
 import json
 from datetime import datetime
 import pandas as pd
+import streamlit.components.v1 as components
 
 # 添加项目路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# 导入前端组件
+from frontend.styles.custom_css import get_custom_css
+from frontend.components.patient_card import render_patient_card
 
 # 延迟导入：只在点击初始化按钮时才导入重型模块
 # 这样可以大幅加快页面首次加载速度
@@ -25,6 +30,9 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# 注入自定义CSS
+st.markdown(get_custom_css(), unsafe_allow_html=True)
 
 
 # 初始化 session state
@@ -49,6 +57,9 @@ if 'current_treatment' not in st.session_state:
     st.session_state.current_treatment = None
 if 'treatment_steps' not in st.session_state:
     st.session_state.treatment_steps = []
+if 'completed_treatments' not in st.session_state:
+    # 存储已完成治疗的详细记录，用于展示
+    st.session_state.completed_treatments = []
 
 
 def initialize_hospital():
@@ -325,6 +336,19 @@ def treat_single_patient_with_visualization(patient, hospital):
         hospital._update_stats(recommended_dept, treatment_outcome['is_recovered'])
         
         treatment_record['success'] = True
+        
+        # 添加完整的患者信息和部门信息
+        treatment_record['patient_info'] = {
+            'name': patient.name,
+            'age': patient.age,
+            'gender': patient.gender,
+            'symptoms': patient.symptoms,
+            'disease': patient.disease
+        }
+        treatment_record['department'] = recommended_dept
+        treatment_record['doctor_name'] = doctor.name
+        treatment_record['treatment'] = treatment_plan
+        
         return treatment_record
         
     except Exception as e:
@@ -336,8 +360,86 @@ def treat_single_patient_with_visualization(patient, hospital):
         return treatment_record
 
 
+def treat_single_patient_with_card(patient, hospital):
+    """
+    单个病人治疗流程，使用新的卡片形式展示
+    静默执行治疗，不显示过程，完成后返回结构化数据
+    """
+    treatment_record = {
+        'patient_id': patient.patient_id,
+        'patient_name': patient.name,
+        'ground_truth_disease': patient.disease,
+        'events': []
+    }
+    
+    try:
+        # 步骤1: 病例输入
+        treatment_record['patient_info'] = {
+            'name': patient.name,
+            'age': patient.age,
+            'gender': patient.gender,
+            'symptoms': patient.symptoms,
+            'disease': patient.disease
+        }
+        
+        # 步骤2: 分诊
+        triage_result = hospital.triage_nurse.triage(patient)
+        treatment_record['triage'] = triage_result
+        recommended_dept = triage_result['recommended_departments'][0]
+        
+        # 获取医生
+        if recommended_dept not in hospital.doctor_agents:
+            recommended_dept = list(hospital.doctor_agents.keys())[0]
+        doctor = hospital.doctor_agents[recommended_dept]
+        
+        treatment_record['department'] = recommended_dept
+        treatment_record['doctor_name'] = doctor.name
+        
+        # 步骤4: 问诊
+        examination_types = hospital._determine_examinations(patient, doctor)
+        
+        # 步骤5: 医学检查
+        examination_results = {}
+        for exam_type in examination_types:
+            exam_result = hospital.examination_nurse.conduct_examination(patient, exam_type)
+            examination_results[exam_type] = exam_result
+        
+        treatment_record['examinations'] = examination_results
+        
+        # 步骤6: AI诊断
+        diagnosis_result = doctor.diagnose_with_evolution(patient, examination_results)
+        treatment_record['diagnosis'] = diagnosis_result
+        
+        patient.receive_diagnosis(diagnosis_result)
+        
+        # 步骤7: 治疗方案
+        treatment_plan = diagnosis_result.get('treatment_plan', {})
+        patient.receive_treatment(treatment_plan)
+        treatment_record['treatment'] = treatment_plan
+        
+        # 步骤8: 康复评估
+        treatment_outcome = patient.evaluate_treatment_outcome()
+        treatment_record['outcome'] = treatment_outcome
+        
+        # 医生学习
+        doctor.learn_from_treatment_outcome(patient, diagnosis_result, treatment_outcome)
+        
+        # 更新统计
+        hospital._update_stats(recommended_dept, treatment_outcome['is_recovered'])
+        
+        treatment_record['success'] = True
+        return treatment_record
+        
+    except Exception as e:
+        import traceback
+        treatment_record['success'] = False
+        treatment_record['error'] = str(e)
+        treatment_record['error_trace'] = traceback.format_exc()
+        return treatment_record
+
+
 def generate_and_treat_patient(num_patients, department_filter):
-    """生成病人并进行治疗"""
+    """生成病人并进行治疗（使用卡片形式展示）"""
     hospital = st.session_state.hospital
     patient_gen = st.session_state.patient_gen
     
@@ -363,20 +465,26 @@ def generate_and_treat_patient(num_patients, department_filter):
         else:
             patients = patient_gen.generate_batch_patients(num_patients)
         
-        # 逐个治疗病人，带可视化
+        # 显示治疗进度
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        # 逐个治疗病人（静默执行）
+        completed_records = []
         for i, patient in enumerate(patients, 1):
-            st.markdown(f"---")
-            st.markdown(f"### 🏥 病人 {i}/{len(patients)}")
+            status_text.text(f"正在治疗第 {i}/{len(patients)} 位患者：{patient.name}...")
+            progress_bar.progress(i / len(patients))
             
-            # 使用可视化治疗
-            record = treat_single_patient_with_visualization(patient, hospital)
+            # 使用静默治疗函数
+            record = treat_single_patient_with_card(patient, hospital)
+            completed_records.append(record)
             
             # 记录到历史
             treatment_record = {
                 'time': datetime.now().strftime("%H:%M:%S"),
                 'patient': patient.name,
                 'disease': patient.disease,
-                'department': record.get('triage', {}).get('recommended_departments', ['未知'])[0],
+                'department': record.get('department', '未知'),
                 'success': record.get('outcome', {}).get('is_recovered', False),
                 'diagnosis_correct': record.get('outcome', {}).get('is_diagnosis_correct', False)
             }
@@ -393,7 +501,23 @@ def generate_and_treat_patient(num_patients, department_filter):
             else:
                 st.session_state.all_time_stats['diagnosis_incorrect'] += 1
         
-        st.success(f"\n✅ 批量治疗完成！共治疗 {len(patients)} 位病人")
+        # 清除进度条
+        progress_bar.empty()
+        status_text.empty()
+        
+        # 保存完成的治疗记录
+        st.session_state.completed_treatments = completed_records
+        
+        st.success(f"✅ 批量治疗完成！共治疗 {len(patients)} 位病人")
+        
+        # 显示所有患者卡片
+        st.markdown("---")
+        st.subheader("📋 治疗结果总览")
+        
+        for i, record in enumerate(completed_records):
+            render_patient_card(i + 1, record, f"patient_{i}_{datetime.now().timestamp()}")
+            st.markdown("<br>", unsafe_allow_html=True)
+        
         return "completed"
     
     except Exception as e:
@@ -662,17 +786,14 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 ])
 
 with tab1:
-    st.subheader("🎯 实时治疗流程可视化")
+    st.subheader("🎯 患者治疗流程展示")
     st.markdown("""
-    该界面将实时展示每个病人的完整治疗流程，包括：
-    1. 📝 **病例输入** - 病人基本信息和症状
-    2. 🎯 **智能分诊** - AI护士分析症状并推荐科室
-    3. 📝 **挂号登记** - 完成就诊登记
-    4. 👨‍⚕️ **医生问诊** - 主治医生询问病史并安排检查
-    5. 🔬 **医学检查** - 进行各项医学检验
-    6. 🧠 **AI智能诊断** - 大模型分析病情并给出诊断
-    7. 💊 **治疗方案** - 制定个性化治疗方案
-    8. 🎉 **康复评估** - 评估治疗效果
+    **现代化的横向进度条展示，包含8个关键步骤：**
+    
+    📝 病例输入 → 🎯 智能分诊 → 📋 挂号登记 → 👨‍⚕️ 医生问诊 → 🔬 医学检查 → 🧠 AI智能诊断 → 💊 治疗方案 → 🎉 康复评估
+    
+    - ✅ 完成的步骤显示为绿色，失败的步骤显示为红色
+    - 🔍 点击卡片下方的"查看详细流程"可展开每个步骤的详细信息
     """)
     st.divider()
     
@@ -689,6 +810,29 @@ with tab1:
         department_filter = st.session_state.get('department_filter', '全部')
         
         result = generate_and_treat_patient(num_patients, department_filter)
+    
+    # 显示历史治疗记录
+    if st.session_state.completed_treatments:
+        st.markdown("---")
+        st.subheader("📋 本次治疗记录")
+        
+        # 添加筛选选项
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            show_all = st.checkbox("显示所有记录", value=False, key="show_all_records")
+        with col2:
+            if st.button("🗑️ 清空记录", key="clear_records"):
+                st.session_state.completed_treatments = []
+                st.rerun()
+        
+        records_to_show = st.session_state.completed_treatments if show_all else st.session_state.completed_treatments[-10:]
+        
+        if not show_all and len(st.session_state.completed_treatments) > 10:
+            st.info(f"显示最近 10 条记录，共 {len(st.session_state.completed_treatments)} 条记录")
+        
+        for i, record in enumerate(records_to_show):
+            render_patient_card(i + 1, record, f"history_patient_{i}_{record.get('patient_id', i)}")
+            st.markdown("<br>", unsafe_allow_html=True)
     else:
         st.info("👉 请在侧边栏选择病人数量和科室，然后点击'开始治疗'按钮启动治疗流程")
 
@@ -890,46 +1034,88 @@ with tab5:
 1. 输入病人数量（1-1000）✨ **支持大批量测试**
 2. 选择科室筛选（可选）
 3. 点击"开始治疗"
-4. 观察实时治疗日志和统计信息
+4. **新界面**：治疗完成后，所有患者以现代化的卡片形式展示 🎨
 
-### 3️⃣ 观察进化
-- **统计** - 查看历史以来所有病人的统计数据 ✨ **新功能：历史记录**
+### 3️⃣ 横向进度条功能 ✨ **全新设计**
+每位患者的治疗流程以精美的横向进度条展示：
+
+**8个步骤节点：**
+- 📝 病例输入
+- 🎯 智能分诊
+- 📋 挂号登记
+- 👨‍⚕️ 医生问诊
+- 🔬 医学检查
+- 🧠 AI智能诊断
+- 💊 制定治疗方案
+- 🎉 康复评估
+
+**交互特性：**
+- ✅ 完成的步骤显示为绿色，带有脉冲动画
+- ❌ 失败的步骤显示为红色，带有抖动动画
+- ⚪ 未执行的步骤显示为灰色
+- 🔍 点击"查看详细流程"展开，可选择任意步骤查看详情
+- 🎨 渐变背景和现代化卡片设计
+
+### 4️⃣ 观察进化
+- **治疗流程** - 横向进度条实时展示 ✨ **新UI设计**
+  - 每位患者独立卡片展示
+  - 点击展开查看详细信息
+  - 支持显示所有历史记录
+- **统计** - 查看历史以来所有病人的统计数据
   - 历史总体统计：所有治疗过的病人数据
   - 当前系统统计：本次session的数据
   - 医生表现和治疗时间线
-- **病例库** - 查看积累的成功案例 ✨ **新功能：查看详细病例**
+- **病例库** - 查看积累的成功案例
   - 按科室筛选病例
   - 查看每个病例的详细信息
-- **经验库** - 查看从失败中学到的规则 ✨ **新功能：查看详细规则**
+- **经验库** - 查看从失败中学到的规则
   - 按科室筛选规则
   - 查看规则内容、触发条件、应用效果
 
-### 4️⃣ 验证学习效果
+### 5️⃣ 验证学习效果
 多次运行治疗，观察：
 - 诊断准确率逐渐提升
 - 病例库和经验库持续增长
 - 治疗成功率改善
-- **历史统计数据持续累积** ✨
+- 历史统计数据持续累积
 
-### 5️⃣ 保存和管理
+### 6️⃣ 保存和管理
 - 点击"保存"按钮保存当前状态
   - 保存医院治疗记录
-  - 保存历史统计数据 ✨
+  - 保存历史统计数据
 - 点击"清空"按钮清空知识库
 - 保存的文件位于 `./simulation_results` 目录
 
 ### 💡 提示
 - 病例库和经验库会持久化保存
-- 历史统计数据在保存后可持久化 ✨
+- 历史统计数据在保存后可持久化
 - 重启系统后继续使用已有知识
 - 可以清空知识库重新训练
-- 支持大批量病人治疗（最多1000人）✨
+- 支持大批量病人治疗（最多1000人）
+- **新增**：前端组件模块化，位于 `frontend/` 目录 ✨
 
 ### ⚙️ 技术栈
-- **前端框架：** Streamlit
+- **前端框架：** Streamlit + HTML/CSS
+- **UI组件：** 自定义组件（frontend/components）
+- **样式系统：** 自定义CSS（frontend/styles）
 - **AI引擎：** OpenAI API
 - **知识库：** ChromaDB
 - **数据集：** CMeIEV2 医学数据集
+
+### 📁 项目结构
+```
+MedicM2/
+├── frontend/              # 前端组件（新增）✨
+│   ├── components/        # UI组件
+│   │   ├── progress_bar.py   # 进度条组件
+│   │   └── patient_card.py   # 患者卡片组件
+│   └── styles/            # 样式文件
+│       └── custom_css.py     # 自定义CSS
+├── simulation/            # 医院模拟系统
+├── agents/                # 医疗Agent
+├── knowledge/             # 知识库
+└── app_hospital_streamlit.py  # 主应用
+```
 """)
 
 # 页脚
