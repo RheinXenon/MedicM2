@@ -56,8 +56,8 @@ def render_sidebar():
         
         st.divider()
         
-        # 治疗控制台
-        st.subheader("🎮 治疗控制台")
+        # 诊疗控制台
+        st.subheader("诊疗控制台")
         
         # 获取当前状态
         treatment_status = st.session_state.treatment_status
@@ -83,15 +83,18 @@ def render_sidebar():
             if st.button("⏸️ 暂停", use_container_width=True, disabled=pause_disabled):
                 st.session_state.treatment_control = 'pause'
                 st.session_state.treatment_status = 'paused'
+                st.rerun()
         
         with col2:
             if st.button("▶️ 继续", use_container_width=True, disabled=resume_disabled):
                 st.session_state.treatment_control = 'resume'
                 st.session_state.treatment_status = 'running'
+                st.rerun()
             
             if st.button("⏹️ 终止", use_container_width=True, disabled=stop_disabled):
                 st.session_state.treatment_control = 'stop'
                 st.session_state.treatment_status = 'stopped'
+                st.rerun()
         
         # 显示当前状态
         status_text = {
