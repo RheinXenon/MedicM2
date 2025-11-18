@@ -1,8 +1,8 @@
 """
 Agent Hospital 可视化前端
-基于 Gradio 实现的实时模拟医院可视化界面
+基于 Streamlit 实现的实时模拟医院可视化界面
 """
-import gradio as gr
+import streamlit as st
 import os
 import sys
 import json
@@ -16,45 +16,59 @@ from simulation.agent_hospital import AgentHospital
 from simulation.patient_generator import PatientGenerator
 
 
-# 全局变量
-hospital = None
-patient_gen = None
-treatment_history = []
+# 页面配置
+st.set_page_config(
+    page_title="Agent Hospital - 模拟医院系统",
+    page_icon="🏥",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+
+# 初始化 session state
+if 'hospital' not in st.session_state:
+    st.session_state.hospital = None
+if 'patient_gen' not in st.session_state:
+    st.session_state.patient_gen = None
+if 'treatment_history' not in st.session_state:
+    st.session_state.treatment_history = []
+if 'initialized' not in st.session_state:
+    st.session_state.initialized = False
 
 
 def initialize_hospital():
     """初始化医院系统"""
-    global hospital, patient_gen
-    
     try:
-        hospital = AgentHospital()
-        patient_gen = PatientGenerator()
+        st.session_state.hospital = AgentHospital()
+        st.session_state.patient_gen = PatientGenerator()
+        st.session_state.initialized = True
         
         status = f"""✅ **Agent Hospital 初始化成功！**
 
 **系统信息：**
-- 科室数量：{len(hospital.departments)}
-- 医生数量：{len(hospital.doctor_agents)}
-- 数据集疾病：{len(patient_gen)} 种
+- 科室数量：{len(st.session_state.hospital.departments)}
+- 医生数量：{len(st.session_state.hospital.doctor_agents)}
+- 数据集疾病：{len(st.session_state.patient_gen)} 种
 
 **科室列表：**
-{', '.join([dept['name'] for dept in hospital.departments])}
+{', '.join([dept['name'] for dept in st.session_state.hospital.departments])}
 
-**病例库：** {len(hospital.case_base)} 个案例
-**经验库：** {len(hospital.experience_base)} 条规则
+**病例库：** {len(st.session_state.hospital.case_base)} 个案例
+**经验库：** {len(st.session_state.hospital.experience_base)} 条规则
 """
-        return status, get_hospital_stats()
+        return True, status
     
     except Exception as e:
-        return f"❌ 初始化失败：{str(e)}", ""
+        return False, f"❌ 初始化失败：{str(e)}"
 
 
 def generate_and_treat_patient(num_patients, department_filter):
     """生成病人并进行治疗"""
-    global hospital, patient_gen, treatment_history
+    hospital = st.session_state.hospital
+    patient_gen = st.session_state.patient_gen
     
     if hospital is None:
-        return "⚠️ 请先初始化系统", "", "", ""
+        return "⚠️ 请先初始化系统"
     
     try:
         # 生成病人
@@ -78,7 +92,16 @@ def generate_and_treat_patient(num_patients, department_filter):
         # 批量治疗
         log = f"🏥 开始治疗 {len(patients)} 位病人...\n\n"
         
+        # 创建进度条
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
         for i, patient in enumerate(patients, 1):
+            # 更新进度
+            progress = i / len(patients)
+            progress_bar.progress(progress)
+            status_text.text(f"正在治疗病人 {i}/{len(patients)}: {patient.name}")
+            
             log += f"【病人 {i}/{len(patients)}】\n"
             log += f"姓名：{patient.name}\n"
             log += f"疾病：{patient.disease}\n"
@@ -87,7 +110,7 @@ def generate_and_treat_patient(num_patients, department_filter):
             record = hospital.simulate_patient_treatment(patient, verbose=False)
             
             # 记录到历史
-            treatment_history.append({
+            st.session_state.treatment_history.append({
                 'time': datetime.now().strftime("%H:%M:%S"),
                 'patient': patient.name,
                 'disease': patient.disease,
@@ -110,22 +133,21 @@ def generate_and_treat_patient(num_patients, department_filter):
             
             log += "-" * 50 + "\n\n"
         
+        progress_bar.empty()
+        status_text.empty()
         log += f"\n✅ 批量治疗完成！"
         
-        # 更新统计
-        stats = get_hospital_stats()
-        evolution = get_evolution_chart()
-        timeline = get_treatment_timeline()
-        
-        return log, stats, evolution, timeline
+        return log
     
     except Exception as e:
         import traceback
-        return f"❌ 治疗过程出错：{str(e)}\n{traceback.format_exc()}", "", "", ""
+        return f"❌ 治疗过程出错：{str(e)}\n{traceback.format_exc()}"
 
 
 def get_hospital_stats():
     """获取医院统计信息"""
+    hospital = st.session_state.hospital
+    
     if hospital is None:
         return "请先初始化系统"
     
@@ -166,6 +188,8 @@ def get_hospital_stats():
 
 def get_evolution_chart():
     """获取医生进化图表"""
+    hospital = st.session_state.hospital
+    
     if hospital is None:
         return None
     
@@ -189,11 +213,11 @@ def get_evolution_chart():
 
 def get_treatment_timeline():
     """获取治疗时间线"""
-    if not treatment_history:
+    if not st.session_state.treatment_history:
         return None
     
     # 只显示最近20条
-    recent = treatment_history[-20:]
+    recent = st.session_state.treatment_history[-20:]
     
     df = pd.DataFrame(recent)
     df['结果'] = df.apply(
@@ -210,6 +234,8 @@ def get_treatment_timeline():
 
 def get_case_base_info():
     """获取病例库信息"""
+    hospital = st.session_state.hospital
+    
     if hospital is None:
         return "请先初始化系统"
     
@@ -231,6 +257,8 @@ def get_case_base_info():
 
 def get_experience_base_info():
     """获取经验库信息"""
+    hospital = st.session_state.hospital
+    
     if hospital is None:
         return "请先初始化系统"
     
@@ -253,6 +281,8 @@ def get_experience_base_info():
 
 def clear_knowledge_bases():
     """清空知识库"""
+    hospital = st.session_state.hospital
+    
     if hospital is None:
         return "请先初始化系统"
     
@@ -266,6 +296,8 @@ def clear_knowledge_bases():
 
 def save_current_state():
     """保存当前状态"""
+    hospital = st.session_state.hospital
+    
     if hospital is None:
         return "请先初始化系统"
     
@@ -283,90 +315,141 @@ def save_current_state():
         return f"❌ 保存失败：{str(e)}"
 
 
-# 创建 Gradio 界面
-with gr.Blocks(title="Agent Hospital - 模拟医院系统", theme=gr.themes.Soft()) as demo:
-    gr.Markdown("""
-# 🏥 Agent Hospital - 可进化的模拟医院系统
-    
+# =============================================================================
+# 主界面
+# =============================================================================
+
+st.title("🏥 Agent Hospital - 可进化的模拟医院系统")
+st.markdown("""
 基于论文 **"Agent Hospital: A Simulacrum of Hospital with Evolvable Medical Agents"** 实现
-    
+
 观察医生Agent如何从治疗中学习和进化 🚀
 """)
+
+# 侧边栏 - 控制面板
+with st.sidebar:
+    st.header("🎛️ 控制面板")
     
-    with gr.Row():
-        with gr.Column(scale=1):
-            gr.Markdown("## 🎛️ 控制面板")
-            
-            init_btn = gr.Button("🚀 初始化系统", variant="primary", size="lg")
-            
-            gr.Markdown("### 生成并治疗病人")
-            num_patients = gr.Slider(
-                minimum=1, 
-                maximum=20, 
-                value=5, 
-                step=1, 
-                label="病人数量"
-            )
-            department_filter = gr.Dropdown(
-                choices=["全部", "心脏科", "神经科", "肿瘤科", "呼吸科", "消化科"],
-                value="全部",
-                label="科室筛选"
-            )
-            treat_btn = gr.Button("🏥 开始治疗", variant="primary")
-            
-            gr.Markdown("### 系统管理")
-            with gr.Row():
-                save_btn = gr.Button("💾 保存状态")
-                clear_btn = gr.Button("🗑️ 清空知识库", variant="stop")
-        
-        with gr.Column(scale=2):
-            gr.Markdown("## 📝 治疗日志")
-            treatment_log = gr.Textbox(
-                label="实时治疗过程",
-                lines=15,
-                max_lines=20,
-                interactive=False
-            )
-            
-            system_status = gr.Textbox(
-                label="系统状态",
-                lines=5,
-                interactive=False
-            )
+    # 初始化按钮
+    if st.button("🚀 初始化系统", type="primary", use_container_width=True):
+        with st.spinner("正在初始化..."):
+            success, message = initialize_hospital()
+            if success:
+                st.success(message)
+            else:
+                st.error(message)
     
-    with gr.Tabs():
-        with gr.Tab("📊 实时统计"):
-            stats_display = gr.Markdown("请先初始化系统")
+    st.divider()
+    
+    # 治疗设置
+    st.subheader("生成并治疗病人")
+    num_patients = st.slider("病人数量", min_value=1, max_value=20, value=5, step=1)
+    department_filter = st.selectbox(
+        "科室筛选",
+        ["全部", "心脏科", "神经科", "肿瘤科", "呼吸科", "消化科"]
+    )
+    
+    if st.button("🏥 开始治疗", type="primary", use_container_width=True):
+        if not st.session_state.initialized:
+            st.warning("⚠️ 请先初始化系统")
+        else:
+            with st.spinner("正在治疗..."):
+                log = generate_and_treat_patient(num_patients, department_filter)
+                st.session_state.treatment_log = log
+    
+    st.divider()
+    
+    # 系统管理
+    st.subheader("系统管理")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("💾 保存", use_container_width=True):
+            message = save_current_state()
+            if "成功" in message:
+                st.success(message)
+            else:
+                st.error(message)
+    
+    with col2:
+        if st.button("🗑️ 清空", use_container_width=True):
+            message = clear_knowledge_bases()
+            if "成功" in message:
+                st.success(message)
+            else:
+                st.error(message)
+
+# 主内容区域
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "📝 治疗日志", 
+    "📊 实时统计", 
+    "📚 病例库", 
+    "🧠 经验库", 
+    "📖 使用说明"
+])
+
+with tab1:
+    st.subheader("实时治疗过程")
+    if 'treatment_log' in st.session_state:
+        st.text_area(
+            "治疗日志",
+            value=st.session_state.treatment_log,
+            height=400,
+            label_visibility="collapsed"
+        )
+    else:
+        st.info("点击'开始治疗'查看治疗日志")
+
+with tab2:
+    st.subheader("医院统计信息")
+    
+    # 显示统计
+    stats_md = get_hospital_stats()
+    st.markdown(stats_md)
+    
+    # 显示图表
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("医生表现")
+        evolution_df = get_evolution_chart()
+        if evolution_df is not None:
+            st.dataframe(evolution_df, use_container_width=True, hide_index=True)
             
-            with gr.Row():
-                with gr.Column():
-                    gr.Markdown("### 医生表现")
-                    evolution_df = gr.Dataframe(
-                        headers=['科室', '治疗病人数', '诊断准确率', '治疗成功率'],
-                        label="各科室医生统计"
-                    )
-                
-                with gr.Column():
-                    gr.Markdown("### 治疗时间线")
-                    timeline_df = gr.Dataframe(
-                        headers=['time', 'patient', 'disease', 'department', '诊断', '结果'],
-                        label="最近治疗记录"
-                    )
-        
-        with gr.Tab("📚 病例库"):
-            case_base_info = gr.Markdown("请先初始化系统")
-            refresh_case_btn = gr.Button("🔄 刷新")
-        
-        with gr.Tab("🧠 经验库"):
-            exp_base_info = gr.Markdown("请先初始化系统")
-            refresh_exp_btn = gr.Button("🔄 刷新")
-        
-        with gr.Tab("📖 使用说明"):
-            gr.Markdown("""
+            # 添加柱状图
+            st.bar_chart(evolution_df.set_index('科室')[['诊断准确率', '治疗成功率']])
+        else:
+            st.info("暂无数据")
+    
+    with col2:
+        st.subheader("治疗时间线")
+        timeline_df = get_treatment_timeline()
+        if timeline_df is not None:
+            st.dataframe(timeline_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("暂无治疗记录")
+
+with tab3:
+    st.subheader("病例库详情")
+    case_info = get_case_base_info()
+    st.markdown(case_info)
+    
+    if st.button("🔄 刷新病例库", key="refresh_case"):
+        st.rerun()
+
+with tab4:
+    st.subheader("经验库详情")
+    exp_info = get_experience_base_info()
+    st.markdown(exp_info)
+    
+    if st.button("🔄 刷新经验库", key="refresh_exp"):
+        st.rerun()
+
+with tab5:
+    st.markdown("""
 ## 使用指南
 
 ### 1️⃣ 初始化系统
-点击"初始化系统"按钮，系统将：
+点击侧边栏的"初始化系统"按钮，系统将：
 - 加载5个科室的医生Agent
 - 加载CMeIEV2数据集（715种疾病）
 - 初始化病例库和经验库
@@ -392,50 +475,14 @@ with gr.Blocks(title="Agent Hospital - 模拟医院系统", theme=gr.themes.Soft
 - 病例库和经验库会持久化保存
 - 重启系统后继续使用已有知识
 - 可以清空知识库重新训练
+
+### ⚙️ 技术栈
+- **前端框架：** Streamlit
+- **AI引擎：** OpenAI API
+- **知识库：** ChromaDB
+- **数据集：** CMeIEV2 医学数据集
 """)
-    
-    # 事件绑定
-    init_btn.click(
-        fn=initialize_hospital,
-        outputs=[system_status, stats_display]
-    )
-    
-    treat_btn.click(
-        fn=generate_and_treat_patient,
-        inputs=[num_patients, department_filter],
-        outputs=[treatment_log, stats_display, evolution_df, timeline_df]
-    )
-    
-    save_btn.click(
-        fn=save_current_state,
-        outputs=[system_status]
-    )
-    
-    clear_btn.click(
-        fn=clear_knowledge_bases,
-        outputs=[system_status]
-    )
-    
-    refresh_case_btn.click(
-        fn=get_case_base_info,
-        outputs=[case_base_info]
-    )
-    
-    refresh_exp_btn.click(
-        fn=get_experience_base_info,
-        outputs=[exp_base_info]
-    )
 
-
-if __name__ == "__main__":
-    print("\n" + "=" * 60)
-    print(" " * 15 + "Agent Hospital Web UI")
-    print("=" * 60)
-    print("\n正在启动可视化界面...")
-    print("请在浏览器中访问显示的URL\n")
-    
-    demo.launch(
-        server_name="0.0.0.0",
-        server_port=7860,
-        share=False
-    )
+# 页脚
+st.divider()
+st.caption("Agent Hospital - 基于可进化医疗Agent的模拟医院系统 | Powered by Streamlit")

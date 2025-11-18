@@ -42,6 +42,11 @@ env/
 chroma_db/
 *.db
 
+# Knowledge Base (知识库)
+knowledge/case_base/
+knowledge/experience_base/
+simulation_results/
+
 # Logs
 *.log
 
