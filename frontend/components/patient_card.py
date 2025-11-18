@@ -152,6 +152,32 @@ def generate_javascript_code(card_id, steps_status):
         const stepsData_{card_id} = {steps_data_json};
         let currentOpenStep_{card_id} = -1;
         
+        // localStorage键名（用于保存展开状态）
+        const storageKey_{card_id} = 'card_expanded_step_{card_id}';
+        
+        // 从localStorage读取展开状态
+        function loadExpandedState_{card_id}() {{
+            try {{
+                const saved = localStorage.getItem(storageKey_{card_id});
+                return saved !== null ? parseInt(saved, 10) : -1;
+            }} catch (e) {{
+                return -1;
+            }}
+        }}
+        
+        // 保存展开状态到localStorage
+        function saveExpandedState_{card_id}(stepIndex) {{
+            try {{
+                if (stepIndex === -1) {{
+                    localStorage.removeItem(storageKey_{card_id});
+                }} else {{
+                    localStorage.setItem(storageKey_{card_id}, stepIndex.toString());
+                }}
+            }} catch (e) {{
+                console.warn('Failed to save expanded state:', e);
+            }}
+        }}
+        
         // 动态调整iframe高度
         function updateFrameHeight_{card_id}() {{
             // 等待DOM更新和动画完成
@@ -185,8 +211,22 @@ def generate_javascript_code(card_id, steps_status):
             progressActive.style.width = '{progress_percent}%';
         }}
         
-        // 页面加载完成后设置初始高度
-        window.addEventListener('load', updateFrameHeight_{card_id});
+        // 恢复之前展开的步骤（如果存在）
+        function restoreExpandedState_{card_id}() {{
+            const savedStep = loadExpandedState_{card_id}();
+            if (savedStep !== -1 && savedStep >= 0 && savedStep < stepsData_{card_id}.length) {{
+                // 延迟执行确保DOM完全加载
+                setTimeout(() => {{
+                    toggleStepDetails_{card_id}('{card_id}', savedStep);
+                }}, 100);
+            }} else {{
+                // 如果没有保存的状态，直接更新高度
+                updateFrameHeight_{card_id}();
+            }}
+        }}
+        
+        // 页面加载完成后恢复状态
+        window.addEventListener('load', restoreExpandedState_{card_id});
         
         // 切换步骤详情
         function toggleStepDetails_{card_id}(cardId, stepIndex) {{
@@ -208,6 +248,8 @@ def generate_javascript_code(card_id, steps_status):
                     const node = document.getElementById('node_' + cardId + '_' + i);
                     if (node) node.classList.remove('active');
                 }}
+                // 保存收起状态
+                saveExpandedState_{card_id}(-1);
                 // 收起后更新高度
                 updateFrameHeight_{card_id}();
                 return;
@@ -232,6 +274,9 @@ def generate_javascript_code(card_id, steps_status):
             // 渲染步骤详情
             const stepData = stepsData_{card_id}[stepIndex];
             detailsContent.innerHTML = renderStepDetails_{card_id}(stepIndex, stepData);
+            
+            // 保存展开状态
+            saveExpandedState_{card_id}(stepIndex);
             
             // 添加展开动画
             detailsContainer.style.animation = 'slideDown 0.3s ease';
