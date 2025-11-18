@@ -12,8 +12,10 @@ import pandas as pd
 # 添加项目路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from simulation.agent_hospital import AgentHospital
-from simulation.patient_generator import PatientGenerator
+# 延迟导入：只在点击初始化按钮时才导入重型模块
+# 这样可以大幅加快页面首次加载速度
+# from simulation.agent_hospital import AgentHospital
+# from simulation.patient_generator import PatientGenerator
 
 
 # 页面配置
@@ -50,11 +52,45 @@ if 'treatment_steps' not in st.session_state:
 
 
 def initialize_hospital():
-    """初始化医院系统"""
+    """初始化医院系统（带实时进度显示）"""
+    # 创建进度显示容器
+    progress_container = st.empty()
+    status_container = st.empty()
+    
     try:
-        st.session_state.hospital = AgentHospital()
+        # 步骤1: 导入模块
+        with progress_container.container():
+            st.info("🔄 步骤 1/3: 正在导入系统模块...")
+        
+        # 延迟导入 - 只在这里才真正加载
+        from simulation.agent_hospital import AgentHospital
+        from simulation.patient_generator import PatientGenerator
+        
+        with progress_container.container():
+            st.success("✅ 步骤 1/3: 系统模块导入完成")
+        
+        # 步骤2: 加载数据集
+        with progress_container.container():
+            st.success("✅ 步骤 1/3: 系统模块导入完成")
+            st.info("🔄 步骤 2/3: 正在加载疾病数据集...")
+        
         st.session_state.patient_gen = PatientGenerator()
+        
+        with progress_container.container():
+            st.success("✅ 步骤 1/3: 系统模块导入完成")
+            st.success(f"✅ 步骤 2/3: 数据集加载完成 ({len(st.session_state.patient_gen)} 种疾病)")
+        
+        # 步骤3: 初始化医院系统
+        with progress_container.container():
+            st.success("✅ 步骤 1/3: 系统模块导入完成")
+            st.success(f"✅ 步骤 2/3: 数据集加载完成 ({len(st.session_state.patient_gen)} 种疾病)")
+            st.info("🔄 步骤 3/3: 正在初始化医院系统（加载知识库、创建医生团队）...")
+        
+        st.session_state.hospital = AgentHospital()
         st.session_state.initialized = True
+        
+        # 全部完成
+        progress_container.empty()
         
         status = f"""✅ **Agent Hospital 初始化成功！**
 
@@ -72,7 +108,10 @@ def initialize_hospital():
         return True, status
     
     except Exception as e:
-        return False, f"❌ 初始化失败：{str(e)}"
+        progress_container.empty()
+        import traceback
+        error_detail = traceback.format_exc()
+        return False, f"❌ 初始化失败：{str(e)}\n\n详细错误：\n```\n{error_detail}\n```"
 
 
 def display_treatment_step(step_name, status, details=None, icon="🔄"):
@@ -552,20 +591,28 @@ st.markdown("""
 基于论文 **"Agent Hospital: A Simulacrum of Hospital with Evolvable Medical Agents"** 实现
 
 观察医生Agent如何从治疗中学习和进化 🚀
+
+💡 **提示**：首次使用请点击侧边栏的「初始化系统」按钮
 """)
 
 # 侧边栏 - 控制面板
 with st.sidebar:
     st.header("🎛️ 控制面板")
     
+    # 显示系统状态
+    if st.session_state.initialized:
+        st.success("✅ 系统已初始化")
+    else:
+        st.warning("⚠️ 系统未初始化")
+    
     # 初始化按钮
     if st.button("🚀 初始化系统", type="primary", use_container_width=True):
-        with st.spinner("正在初始化..."):
-            success, message = initialize_hospital()
-            if success:
-                st.success(message)
-            else:
-                st.error(message)
+        # 不使用 spinner，因为 initialize_hospital() 内部有详细的进度显示
+        success, message = initialize_hospital()
+        if success:
+            st.success(message)
+        else:
+            st.error(message)
     
     st.divider()
     
