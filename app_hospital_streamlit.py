@@ -467,7 +467,7 @@ def treat_single_patient_with_realtime_card(patient, hospital, card_container):
             steps_status
         )
         with card_container:
-            components.html(card_html, height=400, scrolling=False)
+            components.html(card_html, height=280, scrolling=True)
     
     try:
         # 步骤1: 病例输入
@@ -616,7 +616,7 @@ def treat_single_patient_with_realtime_card(patient, hospital, card_container):
             steps_status
         )
         with card_container:
-            components.html(final_card_html, height=600, scrolling=False)
+            components.html(final_card_html, height=280, scrolling=True)
         
         treatment_record['success'] = True
         return treatment_record
@@ -711,14 +711,6 @@ def generate_and_treat_patient(num_patients, department_filter):
         st.session_state.completed_treatments = completed_records
         
         st.success(f"✅ 批量治疗完成！共治疗 {len(patients)} 位病人")
-        
-        # 显示所有患者卡片
-        st.markdown("---")
-        st.subheader("📋 治疗结果总览")
-        
-        for i, record in enumerate(completed_records):
-            render_patient_card(i + 1, record, f"patient_{i}_{datetime.now().timestamp()}")
-            st.markdown("<br>", unsafe_allow_html=True)
         
         return "completed"
     
@@ -999,19 +991,10 @@ with tab1:
     """)
     st.divider()
     
-    # 检查是否需要开始治疗
+    # 显示治疗状态提示
     if 'start_treatment' in st.session_state and st.session_state.start_treatment:
-        st.session_state.start_treatment = False  # 重置标志
-        
-        # 生成并治疗病人
-        hospital = st.session_state.hospital
-        patient_gen = st.session_state.patient_gen
-        
-        # 获取侧边栏的设置
-        num_patients = st.session_state.get('num_patients', 1)
-        department_filter = st.session_state.get('department_filter', '全部')
-        
-        result = generate_and_treat_patient(num_patients, department_filter)
+        st.info("⏳ 治疗即将开始，请稍候...")
+        st.info("💡 提示：在治疗过程中，您可以切换到其他选项卡查看统计数据、病例库等信息")
     
     # 显示历史治疗记录
     if st.session_state.completed_treatments:
@@ -1034,12 +1017,16 @@ with tab1:
         
         for i, record in enumerate(records_to_show):
             render_patient_card(i + 1, record, f"history_patient_{i}_{record.get('patient_id', i)}")
-            st.markdown("<br>", unsafe_allow_html=True)
     else:
         st.info("👉 请在侧边栏选择病人数量和科室，然后点击'开始治疗'按钮启动治疗流程")
 
 with tab2:
-    st.subheader("医院统计信息")
+    col_title, col_refresh = st.columns([4, 1])
+    with col_title:
+        st.subheader("医院统计信息")
+    with col_refresh:
+        if st.button("🔄 刷新数据", key="refresh_stats"):
+            st.rerun()
     
     # 显示历史统计数据
     st.markdown("### 📈 历史总体统计")
@@ -1319,6 +1306,34 @@ MedicM2/
 └── app_hospital_streamlit.py  # 主应用
 ```
 """)
+
+# =============================================================================
+# 治疗执行逻辑（在所有tabs渲染完成后执行，确保其他tabs可以正常显示）
+# =============================================================================
+if 'start_treatment' in st.session_state and st.session_state.start_treatment:
+    st.session_state.start_treatment = False  # 重置标志
+    
+    # 创建一个治疗过程显示容器
+    treatment_container = st.container()
+    
+    with treatment_container:
+        st.markdown("---")
+        st.subheader("🏥 治疗过程")
+        st.info("💡 提示：治疗进行中，您可以随时切换到其他选项卡查看统计数据、病例库等信息")
+        
+        # 生成并治疗病人
+        hospital = st.session_state.hospital
+        patient_gen = st.session_state.patient_gen
+        
+        # 获取侧边栏的设置
+        num_patients = st.session_state.get('num_patients', 1)
+        department_filter = st.session_state.get('department_filter', '全部')
+        
+        # 执行治疗
+        result = generate_and_treat_patient(num_patients, department_filter)
+    
+    # 治疗完成后刷新页面以显示结果
+    st.rerun()
 
 # 页脚
 st.divider()

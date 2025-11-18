@@ -53,8 +53,8 @@ def render_patient_card(patient_index, treatment_record, unique_key):
         steps_status
     )
     
-    # 渲染卡片，高度可以动态调整
-    components.html(card_html, height=600, scrolling=False)
+    # 渲染卡片，使用较小的默认高度让卡片紧凑排列
+    components.html(card_html, height=280, scrolling=True)
 
 
 def generate_interactive_card_html(card_id, patient_name, result_text, result_class, diagnosis_text, steps_status):
@@ -321,4 +321,4 @@ def render_realtime_patient_card(patient, current_step_index, steps_data):
     )
     
     # 渲染卡片
-    components.html(card_html, height=600, scrolling=False)
+    components.html(card_html, height=280, scrolling=True)
