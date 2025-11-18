@@ -240,7 +240,7 @@ def treat_single_patient_with_visualization(patient, hospital):
         
         # 步骤6: AI诊断
         with step6.container():
-            st.markdown("🔵 **步骤6: AI智能诊断** - 进行中...")
+            st.markdown("🔵 **步骤6: 医生诊断** - 进行中...")
             with st.expander("查看详情", expanded=True):
                 st.write("大模型正在分析病情...")
                 st.write("检索相似病例...")
@@ -250,7 +250,7 @@ def treat_single_patient_with_visualization(patient, hospital):
         treatment_record['diagnosis'] = diagnosis_result
         
         with step6.container():
-            st.markdown("✅ **步骤6: AI智能诊断** - 已完成")
+            st.markdown("✅ **步骤6: 医生诊断** - 已完成")
             with st.expander("查看详情"):
                 diagnosed_disease = diagnosis_result.get('disease', '未知')
                 confidence = diagnosis_result.get('confidence', 'unknown')
@@ -711,7 +711,7 @@ with tab1:
     3. 📝 **挂号登记** - 完成就诊登记
     4. 👨‍⚕️ **医生问诊** - 主治医生询问病史并安排检查
     5. 🔬 **医学检查** - 进行各项医学检验
-    6. 🧠 **AI智能诊断** - 大模型分析病情并给出诊断
+    6. 🧠 **医生诊断** - 大模型分析病情并给出诊断
     7. 💊 **治疗方案** - 制定个性化治疗方案
     8. 🎉 **康复评估** - 评估治疗效果
     """)

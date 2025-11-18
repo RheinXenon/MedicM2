@@ -28,6 +28,24 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# 保持实时诊疗期间页面文字颜色/透明度不被 Streamlit 默认样式覆写
+st.markdown(
+    """
+    <style>
+        .stApp, .stApp * {
+            color: inherit !important;
+            opacity: 1 !important;
+        }
+        [data-testid="stMarkdownContainer"],
+        [data-testid="stMarkdownContainer"] * {
+            color: inherit !important;
+            opacity: 1 !important;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 # 初始化 session state
 init_session_state()

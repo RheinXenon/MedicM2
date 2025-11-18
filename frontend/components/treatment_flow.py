@@ -93,14 +93,14 @@ def treat_single_patient_with_visualization(patient, hospital):
         
         # 步骤6: AI诊断
         with step6.container():
-            st.text("🔵 步骤6: AI智能诊断...")
+            st.text("🔵 步骤6: 医生诊断...")
         
         diagnosis_result = doctor.diagnose_with_evolution(patient, examination_results)
         treatment_record['diagnosis'] = diagnosis_result
         diagnosed_disease = diagnosis_result.get('disease', '未知')
         
         with step6.container():
-            st.text(f"✅ 步骤6: AI智能诊断 → {diagnosed_disease}")
+            st.text(f"✅ 步骤6: 医生诊断 → {diagnosed_disease}")
         
         patient.receive_diagnosis(diagnosis_result)
         
@@ -207,7 +207,7 @@ def treat_single_patient_with_visualization(patient, hospital):
         
         record_html += f"""
 <details style="margin: 5px 0;">
-<summary style="cursor: pointer;">✅ 步骤6: AI智能诊断</summary>
+<summary style="cursor: pointer;">✅ 步骤6: 医生诊断</summary>
 <div style="margin-left: 15px; font-size: 0.9em;">
     <p><strong>诊断结果</strong>: {diagnosed_disease}</p>
     <p><strong>置信度</strong>: {diagnosis_result.get('confidence', 'unknown')}</p>
