@@ -68,3 +68,4 @@ logs
 # Data
 datasets/
 reference-papers/
+data/treatment_records.json

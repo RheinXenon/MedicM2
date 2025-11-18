@@ -2,6 +2,7 @@
 Session State 初始化和管理
 """
 import streamlit as st
+from ..utils.treatment_records_manager import TreatmentRecordsManager
 
 
 def init_session_state():
@@ -39,3 +40,13 @@ def init_session_state():
         st.session_state.total_patients_to_treat = 0
     if 'patients_to_treat' not in st.session_state:
         st.session_state.patients_to_treat = []
+    
+    # 治疗记录管理器
+    if 'records_manager' not in st.session_state:
+        st.session_state.records_manager = TreatmentRecordsManager()
+    
+    # 分页相关状态
+    if 'records_page' not in st.session_state:
+        st.session_state.records_page = 0  # 当前页码（从0开始）
+    if 'records_per_page' not in st.session_state:
+        st.session_state.records_per_page = 10  # 每页显示记录数

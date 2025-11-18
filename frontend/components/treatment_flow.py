@@ -251,6 +251,11 @@ def treat_single_patient_with_visualization(patient, hospital, real_time_placeho
         st.session_state.completed_treatments_display.insert(0, record_html)
         
         treatment_record['success'] = True
+        
+        # 保存记录到JSON文件
+        if 'records_manager' in st.session_state:
+            st.session_state.records_manager.save_record(treatment_record)
+        
         return treatment_record
         
     except Exception as e:
