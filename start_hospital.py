@@ -3,13 +3,21 @@ Agent Hospital 启动脚本
 """
 import subprocess
 import sys
+import os
 
 if __name__ == "__main__":
     print("\n" + "=" * 70)
     print(" " * 20 + "🏥 Agent Hospital 启动")
     print("=" * 70)
-    print("\n启动 Streamlit 可视化界面...")
+    print("\n启动 Streamlit 可视化界面（模块化版本）...")
     print("请稍候...\n")
+    
+    # 获取frontend/app.py的绝对路径
+    frontend_app_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), 
+        "frontend", 
+        "app.py"
+    )
     
     try:
         subprocess.run([
@@ -17,7 +25,7 @@ if __name__ == "__main__":
             "-m", 
             "streamlit", 
             "run", 
-            "app_hospital_streamlit.py",
+            frontend_app_path,
             "--server.port=8501",
             "--server.address=127.0.0.1"
         ], check=True)
