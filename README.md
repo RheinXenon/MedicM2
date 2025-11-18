@@ -24,7 +24,7 @@ Agent Hospital 是一个完整的医疗模拟系统，实现了可进化学习�
 ### 1. 安装依赖
 
 ```bash
-pip install openai python-dotenv chromadb
+pip install -r requirements.txt
 ```
 
 ### 2. 配置环境
@@ -39,8 +39,26 @@ OPENAI_MODEL=gpt-4-turbo-preview
 
 ### 3. 运行模拟
 
+**方式1：可视化界面（推荐）🎨**
+
 ```bash
-# 主程序 - 完整模拟
+# 启动 Web 可视化界面
+python start_hospital.py
+
+# 或直接运行
+python app_hospital.py
+```
+
+在浏览器中访问 `http://localhost:7860`，可以：
+- 实时观察治疗过程
+- 查看医生进化统计
+- 可视化病例库和经验库
+- 交互式生成和治疗病人
+
+**方式2：命令行模式**
+
+```bash
+# 主程序 - 批量模拟
 python RUN_AGENT_HOSPITAL.py
 
 # 测试套件 - 验证功能
@@ -80,9 +98,42 @@ Agent Hospital
         → 失败：反思生成新规则
 ```
 
-## 📊 运行示例
+## 🎨 可视化界面特性
 
-### 测试医生进化
+启动 Web 界面后，您可以：
+
+### 1. 实时治疗观察
+- 📝 查看完整的治疗日志
+- 🏥 观察8个事件的治疗流程
+- 👨‍⚕️ 看到每个Agent的决策过程
+
+### 2. 医生进化统计
+- 📊 各科室医生表现对比
+- 📈 诊断准确率和治疗成功率
+- 🎯 实时更新的统计图表
+
+### 3. 知识库可视化
+- 📚 病例库增长情况
+- 🧠 经验库规则详情
+- 🔍 按科室和疾病分类浏览
+
+### 4. 交互式操作
+- 🎛️ 调整病人数量和科室筛选
+- 💾 保存当前状态
+- �️ 清空知识库重新训练
+
+## �📊 运行示例
+
+### 可视化界面操作流程
+
+1. 启动界面：`python start_hospital.py`
+2. 点击"初始化系统"
+3. 设置病人数量（如：5）
+4. 选择科室（如：心脏科）
+5. 点击"开始治疗"
+6. 观察实时日志和统计图表
+
+### 命令行测试医生进化
 
 ```bash
 python test_agent_hospital.py --test evolution
@@ -155,7 +206,9 @@ python RUN_AGENT_HOSPITAL.py
 
 | 文件 | 说明 |
 |------|------|
-| `RUN_AGENT_HOSPITAL.py` | 主运行脚本 |
+| `app_hospital.py` | 🎨 **可视化Web界面** |
+| `start_hospital.py` | 🚀 启动脚本 |
+| `RUN_AGENT_HOSPITAL.py` | 命令行批量模拟 |
 | `test_agent_hospital.py` | 测试脚本 |
 | `example_usage.py` | 使用示例 |
 | `agents/patient_agent.py` | 病人Agent |
