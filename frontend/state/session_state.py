@@ -23,7 +23,19 @@ def init_session_state():
         }
     if 'initialized' not in st.session_state:
         st.session_state.initialized = False
+    if 'initializing' not in st.session_state:
+        st.session_state.initializing = False
     if 'current_treatment' not in st.session_state:
         st.session_state.current_treatment = None
     if 'treatment_steps' not in st.session_state:
         st.session_state.treatment_steps = []
+    if 'treatment_status' not in st.session_state:
+        st.session_state.treatment_status = 'idle'  # 'idle', 'running', 'paused', 'stopped'
+    if 'treatment_control' not in st.session_state:
+        st.session_state.treatment_control = None
+    if 'current_patient_index' not in st.session_state:
+        st.session_state.current_patient_index = 0
+    if 'total_patients_to_treat' not in st.session_state:
+        st.session_state.total_patients_to_treat = 0
+    if 'patients_to_treat' not in st.session_state:
+        st.session_state.patients_to_treat = []

@@ -275,7 +275,7 @@ def update_completed_records(completed_records_placeholder):
 
 
 def generate_and_treat_patient(num_patients, department_filter, real_time_placeholder, completed_records_placeholder):
-    """生成病人并进行治疗"""
+    """生成病人并进行治疗（支持暂停/继续/终止）"""
     hospital = st.session_state.hospital
     patient_gen = st.session_state.patient_gen
     
@@ -283,26 +283,55 @@ def generate_and_treat_patient(num_patients, department_filter, real_time_placeh
         return "⚠️ 请先初始化系统"
     
     try:
-        # 生成病人
-        if department_filter and department_filter != "全部":
-            # 根据科室生成
-            dept_keywords = {
-                "心脏科": ['胸痛', '心悸', '心脏'],
-                "神经科": ['头痛', '头晕', '神经'],
-                "肿瘤科": ['肿块', '肿瘤', '癌'],
-                "呼吸科": ['咳嗽', '呼吸', '肺'],
-                "消化科": ['腹痛', '消化', '胃']
-            }.get(department_filter, ['症状'])
+        # 如果是开始新的治疗，生成病人列表
+        if st.session_state.treatment_control == 'start':
+            if department_filter and department_filter != "全部":
+                # 根据科室生成
+                dept_keywords = {
+                    "心脏科": ['胸痛', '心悸', '心脏'],
+                    "神经科": ['头痛', '头晕', '神经'],
+                    "肿瘤科": ['肿块', '肿瘤', '癌'],
+                    "呼吸科": ['咳嗽', '呼吸', '肺'],
+                    "消化科": ['腹痛', '消化', '胃']
+                }.get(department_filter, ['症状'])
+                
+                patients = patient_gen.generate_patients_by_department(
+                    dept_keywords, 
+                    num_patients
+                )
+            else:
+                patients = patient_gen.generate_batch_patients(num_patients)
             
-            patients = patient_gen.generate_patients_by_department(
-                dept_keywords, 
-                num_patients
-            )
+            # 保存病人列表和初始化索引
+            st.session_state.patients_to_treat = patients
+            st.session_state.current_patient_index = 0
+            st.session_state.total_patients_to_treat = len(patients)
+        
+        # 如果是继续治疗，使用已保存的病人列表
+        elif st.session_state.treatment_control == 'resume':
+            patients = st.session_state.patients_to_treat
         else:
-            patients = patient_gen.generate_batch_patients(num_patients)
+            return "completed"
         
         # 逐个治疗病人，带可视化
-        for i, patient in enumerate(patients, 1):
+        start_index = st.session_state.current_patient_index
+        for i in range(start_index, len(patients)):
+            # 检查控制信号
+            if st.session_state.treatment_control == 'pause':
+                st.session_state.current_patient_index = i
+                with real_time_placeholder.container():
+                    st.warning(f"⏸️ 治疗已暂停，当前进度：{i}/{len(patients)}")
+                return "paused"
+            
+            if st.session_state.treatment_control == 'stop':
+                st.session_state.current_patient_index = 0
+                st.session_state.patients_to_treat = []
+                with real_time_placeholder.container():
+                    st.error(f"⏹️ 治疗已终止，已完成：{i}/{len(patients)}")
+                return "stopped"
+            
+            patient = patients[i]
+            
             # 使用可视化治疗，传递实时进度占位符
             record = treat_single_patient_with_visualization(patient, hospital, real_time_placeholder)
             
@@ -330,7 +359,13 @@ def generate_and_treat_patient(num_patients, department_filter, real_time_placeh
                 st.session_state.all_time_stats['diagnosis_correct'] += 1
             else:
                 st.session_state.all_time_stats['diagnosis_incorrect'] += 1
+            
+            # 更新当前索引
+            st.session_state.current_patient_index = i + 1
         
+        # 治疗完成，清空病人列表
+        st.session_state.patients_to_treat = []
+        st.session_state.current_patient_index = 0
         st.success(f"\n✅ 批量治疗完成！共治疗 {len(patients)} 位病人")
         return "completed"
     

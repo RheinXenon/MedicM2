@@ -9,6 +9,9 @@ from datetime import datetime
 
 def initialize_hospital():
     """初始化医院系统（带实时进度显示）"""
+    # 设置初始化状态
+    st.session_state.initializing = True
+    
     # 创建进度显示容器
     progress_container = st.empty()
     status_container = st.empty()
@@ -44,6 +47,7 @@ def initialize_hospital():
         
         st.session_state.hospital = AgentHospital()
         st.session_state.initialized = True
+        st.session_state.initializing = False
         
         # 全部完成
         progress_container.empty()
@@ -65,6 +69,8 @@ def initialize_hospital():
     
     except Exception as e:
         progress_container.empty()
+        st.session_state.initializing = False
+        st.session_state.initialized = False
         import traceback
         error_detail = traceback.format_exc()
         return False, f"❌ 初始化失败：{str(e)}\n\n详细错误：\n```\n{error_detail}\n```"
