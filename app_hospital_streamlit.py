@@ -32,6 +32,15 @@ if 'patient_gen' not in st.session_state:
     st.session_state.patient_gen = None
 if 'treatment_history' not in st.session_state:
     st.session_state.treatment_history = []
+if 'all_time_stats' not in st.session_state:
+    # 历史统计数据（持久化）
+    st.session_state.all_time_stats = {
+        'total_patients': 0,
+        'successful_treatments': 0,
+        'failed_treatments': 0,
+        'diagnosis_correct': 0,
+        'diagnosis_incorrect': 0
+    }
 if 'initialized' not in st.session_state:
     st.session_state.initialized = False
 if 'current_treatment' not in st.session_state:
@@ -320,14 +329,26 @@ def generate_and_treat_patient(num_patients, department_filter):
             record = treat_single_patient_with_visualization(patient, hospital)
             
             # 记录到历史
-            st.session_state.treatment_history.append({
+            treatment_record = {
                 'time': datetime.now().strftime("%H:%M:%S"),
                 'patient': patient.name,
                 'disease': patient.disease,
                 'department': record.get('triage', {}).get('recommended_departments', ['未知'])[0],
                 'success': record.get('outcome', {}).get('is_recovered', False),
                 'diagnosis_correct': record.get('outcome', {}).get('is_diagnosis_correct', False)
-            })
+            }
+            st.session_state.treatment_history.append(treatment_record)
+            
+            # 更新历史统计
+            st.session_state.all_time_stats['total_patients'] += 1
+            if treatment_record['success']:
+                st.session_state.all_time_stats['successful_treatments'] += 1
+            else:
+                st.session_state.all_time_stats['failed_treatments'] += 1
+            if treatment_record['diagnosis_correct']:
+                st.session_state.all_time_stats['diagnosis_correct'] += 1
+            else:
+                st.session_state.all_time_stats['diagnosis_incorrect'] += 1
         
         st.success(f"\n✅ 批量治疗完成！共治疗 {len(patients)} 位病人")
         return "completed"
@@ -501,9 +522,19 @@ def save_current_state():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = os.path.join(output_dir, f"hospital_state_{timestamp}.json")
         
+        # 保存医院记录
         hospital.save_records(output_path)
         
-        return f"✅ 状态已保存至：{output_path}"
+        # 保存历史统计数据
+        stats_path = os.path.join(output_dir, f"all_time_stats_{timestamp}.json")
+        with open(stats_path, 'w', encoding='utf-8') as f:
+            json.dump({
+                'all_time_stats': st.session_state.all_time_stats,
+                'treatment_history': st.session_state.treatment_history,
+                'timestamp': timestamp
+            }, f, ensure_ascii=False, indent=2)
+        
+        return f"✅ 状态已保存至：{output_path}\n✅ 历史统计已保存至：{stats_path}"
     except Exception as e:
         return f"❌ 保存失败：{str(e)}"
 
@@ -536,7 +567,7 @@ with st.sidebar:
     
     # 治疗设置
     st.subheader("生成并治疗病人")
-    num_patients = st.slider("病人数量", min_value=1, max_value=20, value=1, step=1, key='num_patients')
+    num_patients = st.number_input("病人数量", min_value=1, max_value=1000, value=1, step=1, key='num_patients', help="输入要治疗的病人数量（1-1000）")
     department_filter = st.selectbox(
         "科室筛选",
         ["全部", "心脏科", "神经科", "肿瘤科", "呼吸科", "消化科"],
@@ -573,7 +604,7 @@ with st.sidebar:
 # 主内容区域
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🎯 治疗流程", 
-    "📊 实时统计", 
+    "📊 统计", 
     "📚 病例库", 
     "🧠 经验库", 
     "📖 使用说明"
@@ -613,9 +644,30 @@ with tab1:
 with tab2:
     st.subheader("医院统计信息")
     
-    # 显示统计
+    # 显示历史统计数据
+    st.markdown("### 📈 历史总体统计")
+    all_stats = st.session_state.all_time_stats
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("总病人数", all_stats['total_patients'])
+    with col2:
+        success_rate = (all_stats['successful_treatments'] / all_stats['total_patients'] * 100) if all_stats['total_patients'] > 0 else 0
+        st.metric("治疗成功率", f"{success_rate:.1f}%")
+    with col3:
+        diagnosis_rate = (all_stats['diagnosis_correct'] / all_stats['total_patients'] * 100) if all_stats['total_patients'] > 0 else 0
+        st.metric("诊断准确率", f"{diagnosis_rate:.1f}%")
+    with col4:
+        st.metric("成功治疗", all_stats['successful_treatments'])
+    
+    st.divider()
+    
+    # 显示当前系统统计
+    st.markdown("### 🏯 当前系统统计")
     stats_md = get_hospital_stats()
     st.markdown(stats_md)
+    
+    st.divider()
     
     # 显示图表
     col1, col2 = st.columns(2)
@@ -644,6 +696,56 @@ with tab3:
     case_info = get_case_base_info()
     st.markdown(case_info)
     
+    st.divider()
+    
+    # 显示详细病例
+    st.markdown("### 🔍 查看具体病例")
+    
+    hospital = st.session_state.hospital
+    if hospital and len(hospital.case_base) > 0:
+        # 按科室筛选
+        dept_filter = st.selectbox(
+            "选择科室",
+            ["全部"] + list(hospital.case_base.department_index.keys()),
+            key="case_dept_filter"
+        )
+        
+        # 获取病例
+        if dept_filter == "全部":
+            cases = hospital.case_base.cases[:20]  # 最多显示20个
+        else:
+            cases = hospital.case_base.retrieve_by_department(dept_filter, limit=20)
+        
+        if cases:
+            st.write(f"共找到 {len(cases)} 个相关病例（最多显示20个）")
+            
+            for i, case in enumerate(cases, 1):
+                with st.expander(f"病例 {i}: {case.get('diagnosis', {}).get('disease', '未知')} - {case.get('department', '未知科室')}"):
+                    patient_info = case.get('patient_info', {})
+                    st.write(f"**病例 ID:** {case.get('case_id', '未知')}")
+                    st.write(f"**时间:** {case.get('timestamp', '未知')[:19]}")
+                    st.write(f"**年龄:** {patient_info.get('age', '未知')}岁")
+                    st.write(f"**性别:** {patient_info.get('gender', '未知')}")
+                    
+                    symptoms = case.get('symptoms', [])
+                    st.write(f"**症状:** {', '.join(symptoms[:10]) if symptoms else '无'}")
+                    
+                    diagnosis = case.get('diagnosis', {})
+                    st.write(f"**诊断结果:** {diagnosis.get('disease', '未知')}")
+                    st.write(f"**置信度:** {diagnosis.get('confidence', '未知')}")
+                    
+                    if 'reasoning' in diagnosis:
+                        st.write(f"**诊断依据:** {diagnosis['reasoning'][:200]}...")
+                    
+                    treatment = case.get('treatment', {})
+                    if 'medications' in treatment:
+                        st.write(f"**药物:** {', '.join(treatment['medications'][:5])}")
+        else:
+            st.info("该科室暂无病例")
+    else:
+        st.info("病例库为空，请先治疗病人")
+    
+    st.divider()
     if st.button("🔄 刷新病例库", key="refresh_case"):
         st.rerun()
 
@@ -652,6 +754,74 @@ with tab4:
     exp_info = get_experience_base_info()
     st.markdown(exp_info)
     
+    st.divider()
+    
+    # 显示详细规则
+    st.markdown("### 🔍 查看具体规则")
+    
+    hospital = st.session_state.hospital
+    if hospital and len(hospital.experience_base) > 0:
+        # 按科室筛选
+        dept_filter = st.selectbox(
+            "选择科室",
+            ["全部"] + list(hospital.experience_base.department_index.keys()),
+            key="exp_dept_filter"
+        )
+        
+        # 获取规则
+        if dept_filter == "全部":
+            rules = hospital.experience_base.rules[:20]  # 最多显示20个
+        else:
+            rule_ids = hospital.experience_base.department_index.get(dept_filter, [])[:20]
+            rules = [hospital.experience_base.rule_index[rid] for rid in rule_ids]
+        
+        if rules:
+            st.write(f"共找到 {len(rules)} 条相关规则（最多显示20条）")
+            
+            for i, rule in enumerate(rules, 1):
+                # 计算成功率
+                success_rate = (rule['success_count'] / rule['application_count']) if rule['application_count'] > 0 else 0
+                confidence = rule.get('confidence', 0)
+                
+                status_icon = "✅" if rule['status'] == 'active' else "⚠️"
+                
+                with st.expander(f"{status_icon} 规则 {i}: {rule.get('disease', '未知')} - {rule.get('department', '未知科室')} (置信度: {confidence:.2f})"):
+                    st.write(f"**规则 ID:** {rule.get('rule_id', '未知')}")
+                    st.write(f"**创建时间:** {rule.get('timestamp', '未知')[:19]}")
+                    st.write(f"**状态:** {rule['status']}")
+                    st.write(f"**应用次数:** {rule['application_count']}")
+                    st.write(f"**成功次数:** {rule['success_count']}")
+                    st.write(f"**成功率:** {success_rate:.1%}")
+                    
+                    st.write(f"**规则内容:**")
+                    st.info(rule.get('rule_content', '无'))
+                    
+                    st.write(f"**推荐行动:**")
+                    st.write(rule.get('recommendation', '无'))
+                    
+                    if 'reasoning' in rule:
+                        st.write(f"**规则依据:**")
+                        st.write(rule['reasoning'])
+                    
+                    if 'trigger_conditions' in rule:
+                        st.write(f"**触发条件:**")
+                        trigger = rule['trigger_conditions']
+                        if 'symptoms' in trigger:
+                            st.write(f"- 症状: {', '.join(trigger['symptoms'])}")
+                        if 'age_range' in trigger:
+                            st.write(f"- 年龄范围: {trigger['age_range']}")
+                    
+                    if 'source_case' in rule:
+                        st.write(f"**来源案例:**")
+                        source = rule['source_case']
+                        st.write(f"- 错误诊断: {source.get('wrong_diagnosis', '未知')}")
+                        st.write(f"- 正确诊断: {source.get('correct_diagnosis', '未知')}")
+        else:
+            st.info("该科室暂无规则")
+    else:
+        st.info("经验库为空，当医生出现误诊时会自动生成规则")
+    
+    st.divider()
     if st.button("🔄 刷新经验库", key="refresh_exp"):
         st.rerun()
 
@@ -666,26 +836,43 @@ with tab5:
 - 初始化病例库和经验库
 
 ### 2️⃣ 开始治疗
-1. 选择病人数量（1-20）
+1. 输入病人数量（1-1000）✨ **支持大批量测试**
 2. 选择科室筛选（可选）
 3. 点击"开始治疗"
 4. 观察实时治疗日志和统计信息
 
 ### 3️⃣ 观察进化
-- **实时统计** - 查看各科室医生的表现
-- **病例库** - 查看积累的成功案例
-- **经验库** - 查看从失败中学到的规则
+- **统计** - 查看历史以来所有病人的统计数据 ✨ **新功能：历史记录**
+  - 历史总体统计：所有治疗过的病人数据
+  - 当前系统统计：本次session的数据
+  - 医生表现和治疗时间线
+- **病例库** - 查看积累的成功案例 ✨ **新功能：查看详细病例**
+  - 按科室筛选病例
+  - 查看每个病例的详细信息
+- **经验库** - 查看从失败中学到的规则 ✨ **新功能：查看详细规则**
+  - 按科室筛选规则
+  - 查看规则内容、触发条件、应用效果
 
 ### 4️⃣ 验证学习效果
 多次运行治疗，观察：
 - 诊断准确率逐渐提升
 - 病例库和经验库持续增长
 - 治疗成功率改善
+- **历史统计数据持续累积** ✨
+
+### 5️⃣ 保存和管理
+- 点击"保存"按钮保存当前状态
+  - 保存医院治疗记录
+  - 保存历史统计数据 ✨
+- 点击"清空"按钮清空知识库
+- 保存的文件位于 `./simulation_results` 目录
 
 ### 💡 提示
 - 病例库和经验库会持久化保存
+- 历史统计数据在保存后可持久化 ✨
 - 重启系统后继续使用已有知识
 - 可以清空知识库重新训练
+- 支持大批量病人治疗（最多1000人）✨
 
 ### ⚙️ 技术栈
 - **前端框架：** Streamlit
