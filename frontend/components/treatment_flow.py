@@ -221,10 +221,10 @@ def generate_and_treat_patient(num_patients, department_filter, real_time_placeh
             # 使用可视化治疗，传递实时进度占位符
             record = treat_single_patient_with_visualization(patient, hospital, real_time_placeholder)
             
-            # 立即更新已完成记录显示（动态更新）
+            # 立即更新已完成记录显示（动态更新，只更新记录内容，不更新翻页按钮）
             if completed_records_placeholder:
-                from ..views.treatment_page import render_completed_records_with_pagination
-                render_completed_records_with_pagination(completed_records_placeholder)
+                from ..views.treatment_page import render_records_content_only
+                render_records_content_only(completed_records_placeholder)
             
             # 记录到历史
             treatment_record = {

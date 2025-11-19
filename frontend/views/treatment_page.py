@@ -5,11 +5,11 @@ import streamlit as st
 from ..components.treatment_flow import generate_and_treat_patient
 
 
-def render_completed_records_with_pagination(container_placeholder=None):
-    """渲染已完成的治疗记录（带分页）
+def render_records_content_only(container_placeholder=None):
+    """只渲染记录内容，不渲染翻页按钮（用于占位符动态更新）
     
     Args:
-        container_placeholder: 可选的占位符，用于动态更新显示
+        container_placeholder: 占位符
     """
     # 获取记录管理器
     records_manager = st.session_state.get('records_manager')
@@ -61,43 +61,63 @@ def render_completed_records_with_pagination(container_placeholder=None):
             # 从JSON记录构建显示HTML
             record_html = _build_record_html(record)
             st.markdown(record_html, unsafe_allow_html=True)
-        
-        st.divider()
-        
-        # 翻页控制按钮（移到底部，优化UI）
-        st.markdown("""<style>
-            div.stButton > button {
-                width: 100%;
-                border-radius: 8px;
-                font-weight: 600;
-                transition: all 0.3s;
-            }
-            div.stButton > button:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            }
-        </style>""", unsafe_allow_html=True)
-        
-        col1, col2, col3 = st.columns([1, 2, 1])
-        
-        # 使用动态key避免在占位符模式下的key冲突
-        key_suffix = "_placeholder" if container_placeholder else ""
-        
-        with col1:
-            if st.button("⬅️ 上一页", disabled=(current_page == 0), use_container_width=True, key=f"prev_page{key_suffix}"):
-                st.session_state.records_page = max(0, current_page - 1)
-                st.rerun()
-        
-        with col2:
-            st.markdown(f"""<div style='text-align: center; padding: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                color: white; border-radius: 8px; font-weight: bold;'>
-                第 {current_page + 1} / {total_pages} 页
-            </div>""", unsafe_allow_html=True)
-        
-        with col3:
-            if st.button("下一页 ➡️", disabled=(current_page >= total_pages - 1), use_container_width=True, key=f"next_page{key_suffix}"):
-                st.session_state.records_page = min(total_pages - 1, current_page + 1)
-                st.rerun()
+
+
+def render_pagination_controls():
+    """渲染翻页控件（独立函数，不在占位符内）"""
+    records_manager = st.session_state.get('records_manager')
+    if not records_manager:
+        return
+    
+    total_records = records_manager.get_total_count()
+    if total_records == 0:
+        return
+    
+    records_per_page = st.session_state.get('records_per_page', 10)
+    current_page = st.session_state.get('records_page', 0)
+    total_pages = (total_records + records_per_page - 1) // records_per_page
+    
+    # 确保当前页码在有效范围内
+    if current_page >= total_pages:
+        current_page = total_pages - 1
+        st.session_state.records_page = current_page
+    if current_page < 0:
+        current_page = 0
+        st.session_state.records_page = current_page
+    
+    st.divider()
+    
+    # 翻页控制按钮
+    st.markdown("""<style>
+        div.stButton > button {
+            width: 100%;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        div.stButton > button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+    </style>""", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col1:
+        if st.button("⬅️ 上一页", disabled=(current_page == 0), use_container_width=True, key="prev_page"):
+            st.session_state.records_page = max(0, current_page - 1)
+            st.rerun()
+    
+    with col2:
+        st.markdown(f"""<div style='text-align: center; padding: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            color: white; border-radius: 8px; font-weight: bold;'>
+            第 {current_page + 1} / {total_pages} 页
+        </div>""", unsafe_allow_html=True)
+    
+    with col3:
+        if st.button("下一页 ➡️", disabled=(current_page >= total_pages - 1), use_container_width=True, key="next_page"):
+            st.session_state.records_page = min(total_pages - 1, current_page + 1)
+            st.rerun()
 
 
 def _build_record_html(record):
@@ -245,11 +265,14 @@ def render_treatment_page():
     # 下半部分：已完成的治疗记录
     st.markdown("### 📋 已完成的治疗记录")
     
-    # 创建已完成记录的占位符，用于动态更新
+    # 创建已完成记录的占位符，用于动态更新（只包含记录内容）
     completed_records_placeholder = st.empty()
     
-    # 【关键】先渲染一次历史记录，确保占位符始终有内容
-    render_completed_records_with_pagination(completed_records_placeholder)
+    # 【关键】先渲染一次历史记录内容，确保占位符始终有内容
+    render_records_content_only(completed_records_placeholder)
+    
+    # 翻页控件放在占位符外部（固定位置，避免重复渲染）
+    render_pagination_controls()
     
     # 获取当前状态
     treatment_status = st.session_state.treatment_status
