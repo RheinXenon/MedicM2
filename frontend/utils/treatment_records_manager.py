@@ -152,6 +152,162 @@ class TreatmentRecordsManager:
             print(f"清空记录失败: {e}")
             return False
     
+    def get_stats_by_department(self) -> Dict:
+        """
+        获取按科室分组的统计信息
+        
+        Returns:
+            按科室分组的统计字典
+        """
+        dept_stats = {}
+        
+        for record in self.records:
+            # 获取科室信息（从分诊或诊断结果中）
+            triage_info = record.get('triage', {})
+            dept = None
+            
+            if isinstance(triage_info, dict):
+                recommended_depts = triage_info.get('recommended_departments', [])
+                if recommended_depts:
+                    dept = recommended_depts[0]
+            
+            if not dept:
+                dept = "未知科室"
+            
+            # 初始化科室统计
+            if dept not in dept_stats:
+                dept_stats[dept] = {
+                    'total_patients': 0,
+                    'successful_treatments': 0,
+                    'failed_treatments': 0,
+                    'diagnosis_correct': 0,
+                    'diagnosis_incorrect': 0
+                }
+            
+            # 更新统计
+            dept_stats[dept]['total_patients'] += 1
+            
+            outcome = record.get('outcome', {})
+            if outcome.get('is_recovered', False):
+                dept_stats[dept]['successful_treatments'] += 1
+            else:
+                dept_stats[dept]['failed_treatments'] += 1
+            
+            if outcome.get('is_diagnosis_correct', False):
+                dept_stats[dept]['diagnosis_correct'] += 1
+            else:
+                dept_stats[dept]['diagnosis_incorrect'] += 1
+        
+        # 计算百分比
+        for dept, stats in dept_stats.items():
+            total = stats['total_patients']
+            if total > 0:
+                stats['diagnosis_accuracy'] = (stats['diagnosis_correct'] / total) * 100
+                stats['treatment_success_rate'] = (stats['successful_treatments'] / total) * 100
+            else:
+                stats['diagnosis_accuracy'] = 0.0
+                stats['treatment_success_rate'] = 0.0
+        
+        return dept_stats
+    
+    def get_disease_distribution(self) -> Dict:
+        """
+        获取疾病分布统计
+        
+        Returns:
+            疾病分布字典
+        """
+        disease_count = {}
+        
+        for record in self.records:
+            disease = record.get('ground_truth_disease', '未知疾病')
+            disease_count[disease] = disease_count.get(disease, 0) + 1
+        
+        # 按数量排序
+        sorted_diseases = sorted(disease_count.items(), key=lambda x: x[1], reverse=True)
+        return dict(sorted_diseases)
+    
+    def get_time_series_stats(self, days: int = 30) -> List[Dict]:
+        """
+        获取时间序列统计（按天分组）
+        
+        Args:
+            days: 统计最近多少天的数据
+            
+        Returns:
+            时间序列统计列表
+        """
+        from collections import defaultdict
+        from datetime import datetime, timedelta
+        
+        # 获取日期范围
+        today = datetime.now().date()
+        start_date = today - timedelta(days=days)
+        
+        # 按日期分组统计
+        daily_stats = defaultdict(lambda: {
+            'date': None,
+            'total': 0,
+            'successful': 0,
+            'diagnosis_correct': 0
+        })
+        
+        for record in self.records:
+            timestamp_str = record.get('timestamp', '')
+            try:
+                record_date = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S").date()
+                
+                # 只统计指定天数内的数据
+                if record_date >= start_date:
+                    date_key = record_date.strftime("%Y-%m-%d")
+                    daily_stats[date_key]['date'] = date_key
+                    daily_stats[date_key]['total'] += 1
+                    
+                    outcome = record.get('outcome', {})
+                    if outcome.get('is_recovered', False):
+                        daily_stats[date_key]['successful'] += 1
+                    if outcome.get('is_diagnosis_correct', False):
+                        daily_stats[date_key]['diagnosis_correct'] += 1
+            except:
+                continue
+        
+        # 转换为列表并排序
+        result = sorted(daily_stats.values(), key=lambda x: x['date'] or '')
+        return result
+    
+    def get_recent_records_summary(self, limit: int = 10) -> List[Dict]:
+        """
+        获取最近记录的摘要信息
+        
+        Args:
+            limit: 返回记录数量
+            
+        Returns:
+            记录摘要列表
+        """
+        summaries = []
+        
+        for record in self.records[:limit]:
+            summary = {
+                'patient_name': record.get('patient_name', '未知'),
+                'disease': record.get('ground_truth_disease', '未知'),
+                'timestamp': record.get('timestamp', '未知'),
+                'department': '未知',
+                'is_recovered': record.get('outcome', {}).get('is_recovered', False),
+                'is_diagnosis_correct': record.get('outcome', {}).get('is_diagnosis_correct', False)
+            }
+            
+            # 获取科室信息
+            triage_info = record.get('triage', {})
+            if isinstance(triage_info, dict):
+                recommended_depts = triage_info.get('recommended_departments', [])
+                if recommended_depts:
+                    summary['department'] = recommended_depts[0]
+            
+            summaries.append(summary)
+        
+        return summaries
+    
     def export_records(self, export_path: str) -> bool:
         """
         导出记录到指定路径
