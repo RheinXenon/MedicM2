@@ -4,6 +4,7 @@
 """
 from typing import Dict, List, Optional
 from .base_agent import BaseAgent
+from utils.prompt_templates import PATIENT_SYMPTOM_DESCRIPTION_TEMPLATE
 import random
 import time
 
@@ -103,22 +104,13 @@ class PatientAgent(BaseAgent):
             )
             chief_complaint = "、".join(main_symptoms)
         
-        # 生成自然语言描述
-        prompt = f"""你是一位{self.age}岁的{self.gender}性病人，名叫{self.name}。
-你现在感到身体不适，来到医院就诊。
-
-你的主要症状包括：
-{chief_complaint}
-
-请用第一人称，以病人的口吻自然地描述你的不适症状，不要提及具体的疾病名称（因为你不知道自己得了什么病）。
-描述应该：
-1. 使用通俗易懂的语言，不要使用医学术语
-2. 描述症状出现的时间、程度、特点等
-3. 表达你的担忧和不适感
-4. 长度控制在100-150字
-
-直接输出描述，不要有其他内容。
-"""
+        # 生成自然语言描述（使用模板）
+        prompt = PATIENT_SYMPTOM_DESCRIPTION_TEMPLATE.format(
+            patient_age=self.age,
+            patient_gender=self.gender,
+            patient_name=self.name,
+            chief_complaint=chief_complaint
+        )
         
         description = self.generate_response(
             prompt,

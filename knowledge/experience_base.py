@@ -7,6 +7,7 @@ import json
 import os
 from datetime import datetime
 from collections import defaultdict
+from utils.prompt_templates import EXPERIENCE_RULE_GENERATION_TEMPLATE
 
 
 class ExperienceBase:
@@ -229,38 +230,19 @@ class ExperienceBase:
         Returns:
             生成的规则ID，如果生成失败则返回None
         """
-        # 构建反思提示词
+        # 构建反思提示词（使用模板）
         symptoms = failed_case.get('symptoms', [])
         medical_history = failed_case.get('medical_history', [])
         patient_info = failed_case.get('patient_info', {})
         
-        prompt = f"""作为一位经验丰富的医生，请从以下失败案例中总结经验教训。
-
-【案例信息】
-病人年龄：{patient_info.get('age', '未知')}岁
-病人性别：{patient_info.get('gender', '未知')}
-症状：{', '.join(symptoms)}
-既往病史：{', '.join(medical_history) if medical_history else '无'}
-
-【诊断错误】
-错误诊断：{wrong_diagnosis}
-正确诊断：{correct_diagnosis}
-
-请分析导致误诊的原因，并总结一条经验规则，帮助未来遇到类似情况时做出正确诊断。
-
-请以JSON格式输出，包含以下字段：
-{{
-    "rule_content": "经验规则的自然语言描述",
-    "trigger_conditions": {{
-        "symptoms": ["关键症状1", "关键症状2"],
-        "age_range": "年龄范围（如果相关）",
-        "other_conditions": "其他触发条件"
-    }},
-    "recommendation": "推荐的诊断思路或检查项目",
-    "reasoning": "规则的理由和依据",
-    "confidence": 0.7  // 初始置信度(0-1)
-}}
-"""
+        prompt = EXPERIENCE_RULE_GENERATION_TEMPLATE.format(
+            patient_age=patient_info.get('age', '未知'),
+            patient_gender=patient_info.get('gender', '未知'),
+            symptoms=', '.join(symptoms),
+            medical_history=', '.join(medical_history) if medical_history else '无',
+            wrong_diagnosis=wrong_diagnosis,
+            correct_diagnosis=correct_diagnosis
+        )
         
         try:
             response = llm_generator.generate_response(

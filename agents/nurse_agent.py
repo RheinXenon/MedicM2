@@ -4,6 +4,7 @@
 """
 from typing import Dict, List, Optional
 from .base_agent import BaseAgent
+from utils.prompt_templates import NURSE_TRIAGE_TEMPLATE, NURSE_EXAMINATION_TEMPLATE
 import json
 
 
@@ -124,35 +125,15 @@ class NurseAgent(BaseAgent):
         else:
             dept_list = "未找到明显相关的科室"
         
-        prompt = f"""你是一位经验丰富的分诊护士。现在有一位病人来就诊。
-
-病人基本信息：
-- 姓名：{patient_agent.name}
-- 年龄：{patient_agent.age}岁
-- 性别：{patient_agent.gender}
-
-病人主诉：
-{chief_complaint}
-
-病人症状列表：
-{symptoms_text}
-
-根据初步分析，可能相关的科室：
-{dept_list}
-
-请你作为专业的分诊护士：
-1. 综合分析病人的症状
-2. 推荐最合适的1-2个就诊科室（按优先级排序）
-3. 简要说明推荐理由
-4. 如果需要，给出初步的就诊建议
-
-请以JSON格式输出，包含以下字段：
-{{
-    "recommended_departments": ["科室1", "科室2"],
-    "reasoning": "推荐理由",
-    "suggestions": "就诊建议"
-}}
-"""
+        # 使用提示词模板
+        prompt = NURSE_TRIAGE_TEMPLATE.format(
+            patient_name=patient_agent.name,
+            patient_age=patient_agent.age,
+            patient_gender=patient_agent.gender,
+            chief_complaint=chief_complaint,
+            symptoms_text=symptoms_text,
+            department_list=dept_list
+        )
         
         response = self.generate_response(
             prompt,
@@ -230,36 +211,15 @@ class NurseAgent(BaseAgent):
         # 根据病人的真实疾病生成相应的检查结果
         # 这里使用LLM + 医学知识生成合理的检查报告
         
-        prompt = f"""你是一位专业的医学检查护士/技师。现在需要为病人生成{examination_type}检查报告。
-
-病人信息：
-- 姓名：{patient_agent.name}
-- 年龄：{patient_agent.age}岁
-- 性别：{patient_agent.gender}
-- 实际疾病：{patient_agent.disease}（注意：这是ground truth，用于生成真实的检查结果）
-
-病人症状：
-{', '.join(patient_agent.symptoms[:10])}
-
-请生成符合该疾病特征的{examination_type}检查报告。报告应该：
-1. 包含该检查项目的常规指标
-2. 如果该疾病会影响这些指标，应在报告中体现异常值
-3. 使用专业的医学术语
-4. 格式清晰，便于医生阅读
-
-请以JSON格式输出，包含以下字段：
-{{
-    "examination_type": "{examination_type}",
-    "findings": "检查发现（描述性文字）",
-    "key_indicators": {{
-        "指标1": "正常/异常值",
-        "指标2": "正常/异常值"
-    }},
-    "conclusion": "检查结论"
-}}
-
-注意：生成的报告应该真实反映病人的疾病状态，帮助医生做出正确诊断。
-"""
+        # 使用提示词模板
+        prompt = NURSE_EXAMINATION_TEMPLATE.format(
+            examination_type=examination_type,
+            patient_name=patient_agent.name,
+            patient_age=patient_agent.age,
+            patient_gender=patient_agent.gender,
+            patient_disease=patient_agent.disease,
+            symptoms=', '.join(patient_agent.symptoms[:10])
+        )
         
         response = self.generate_response(
             prompt,

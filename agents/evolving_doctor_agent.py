@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 from .base_agent import BaseAgent
 from knowledge.medical_case_base import MedicalCaseBase
 from knowledge.experience_base import ExperienceBase
-from utils.prompt_templates import DOCTOR_DIAGNOSIS_TEMPLATE
+from utils.prompt_templates import DOCTOR_DIAGNOSIS_WITH_KNOWLEDGE_TEMPLATE
 
 
 class EvolvingDoctorAgent(BaseAgent):
@@ -156,48 +156,18 @@ class EvolvingDoctorAgent(BaseAgent):
         # 格式化检查结果
         examination_text = self._format_examination_results(examination_results)
         
-        # 构建完整提示词
-        prompt = f"""你是一位{self.department_name}的专科医生，正在为病人进行诊断。
-
-【病人信息】
-年龄：{patient_agent.age}岁
-性别：{patient_agent.gender}
-主诉症状：{', '.join(symptoms[:10])}
-既往病史：{', '.join(medical_history) if medical_history else '无'}
-
-【医学检查结果】
-{examination_text}
-
-【参考：相似成功案例】
-{case_references}
-
-【参考：经验规则】
-{rule_references}
-
-【参考：专业知识】
-{knowledge_context}
-
-请根据以上信息进行诊断。你的诊断应包括：
-1. 最可能的疾病诊断
-2. 诊断依据和推理过程
-3. 鉴别诊断（如有必要）
-4. 推荐的治疗方案
-5. 置信度评估（高/中/低）
-
-请以JSON格式输出：
-{{
-    "disease": "疾病名称",
-    "diagnosis_reasoning": "诊断推理过程",
-    "differential_diagnosis": ["鉴别诊断1", "鉴别诊断2"],
-    "treatment_plan": {{
-        "medications": ["药物1", "药物2"],
-        "procedures": ["治疗措施1", "治疗措施2"],
-        "recommendations": "其他建议"
-    }},
-    "confidence": "high/medium/low",
-    "key_factors": ["关键诊断因素1", "关键诊断因素2"]
-}}
-"""
+        # 构建完整提示词（使用模板）
+        prompt = DOCTOR_DIAGNOSIS_WITH_KNOWLEDGE_TEMPLATE.format(
+            department_name=self.department_name,
+            patient_age=patient_agent.age,
+            patient_gender=patient_agent.gender,
+            chief_symptoms=', '.join(symptoms[:10]),
+            medical_history=', '.join(medical_history) if medical_history else '无',
+            examination_text=examination_text,
+            case_references=case_references,
+            rule_references=rule_references,
+            knowledge_context=knowledge_context
+        )
         
         # 6. 生成诊断
         system_message = f"你是一位专业的{self.department_name}医生，擅长{self.department_name_en}领域的疾病诊断和治疗。"
