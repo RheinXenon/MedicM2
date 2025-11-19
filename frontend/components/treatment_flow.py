@@ -26,6 +26,7 @@ def treat_single_patient_with_visualization(patient, hospital, real_time_placeho
         'patient_id': patient.patient_id,
         'patient_name': patient.name,
         'ground_truth_disease': patient.disease,
+        'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         'events': []
     }
     
@@ -135,121 +136,6 @@ def treat_single_patient_with_visualization(patient, hospital, real_time_placeho
         time.sleep(0.3)
         real_time_placeholder.empty()
         
-        # 构建治疗结果记录
-        is_diagnosis_correct = treatment_outcome['is_diagnosis_correct']
-        is_recovered = treatment_outcome['is_recovered']
-        
-        diagnosis_status = "✅ 诊断正确" if is_diagnosis_correct else "❌ 诊断错误"
-        treatment_status = "✅ 治疗成功" if is_recovered else "⚠️ 治疗失败"
-        
-        # 生成治疗记录HTML
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        record_html = f"""
-<details>
-<summary style="cursor: pointer; padding: 8px; background-color: #f0f2f6; border-radius: 5px; margin-bottom: 5px;">
-    <strong>👤 {patient.name}</strong> | 疾病: {patient.disease} | {diagnosis_status} | {treatment_status} | ⏰ {timestamp}
-</summary>
-<div style="padding: 10px; margin-left: 20px; border-left: 2px solid #ddd;">
-"""
-        
-        # 添加每个步骤的详情（折叠）
-        record_html += f"""
-<details style="margin: 5px 0;">
-<summary style="cursor: pointer;">✅ 步骤1: 病例输入</summary>
-<div style="margin-left: 15px; font-size: 0.9em;">
-    <p><strong>姓名</strong>: {step1_info['name']}</p>
-    <p><strong>年龄</strong>: {step1_info['age']}岁</p>
-    <p><strong>性别</strong>: {step1_info['gender']}</p>
-    <p><strong>症状</strong>: {step1_info['symptoms']}</p>
-</div>
-</details>
-
-<details style="margin: 5px 0;">
-<summary style="cursor: pointer;">✅ 步骤2: 智能分诊</summary>
-<div style="margin-left: 15px; font-size: 0.9em;">
-    <p><strong>推荐科室</strong>: {recommended_dept}</p>
-    <p><strong>理由</strong>: {triage_result.get('reasoning', '基于症状分析')}</p>
-</div>
-</details>
-
-<details style="margin: 5px 0;">
-<summary style="cursor: pointer;">✅ 步骤3: 挂号登记</summary>
-<div style="margin-left: 15px; font-size: 0.9em;">
-    <p>已挂号至 <strong>{step3_info}</strong></p>
-</div>
-</details>
-
-<details style="margin: 5px 0;">
-<summary style="cursor: pointer;">✅ 步骤4: 医生问诊</summary>
-<div style="margin-left: 15px; font-size: 0.9em;">
-    <p><strong>主治医生</strong>: {doctor.name} ({recommended_dept})</p>
-    <p><strong>需要检查</strong>: {', '.join(examination_types)}</p>
-</div>
-</details>
-
-<details style="margin: 5px 0;">
-<summary style="cursor: pointer;">✅ 步骤5: 医学检查</summary>
-<div style="margin-left: 15px; font-size: 0.9em;">
-"""
-        for exam_type, result in examination_results.items():
-            record_html += f"<p><strong>{exam_type}</strong>: {result.get('result', '正常')}</p>\n"
-        record_html += "</div>\n</details>\n\n"
-        
-        record_html += f"""
-<details style="margin: 5px 0;">
-<summary style="cursor: pointer;">✅ 步骤6: 医生诊断</summary>
-<div style="margin-left: 15px; font-size: 0.9em;">
-    <p><strong>诊断结果</strong>: {diagnosed_disease}</p>
-    <p><strong>置信度</strong>: {diagnosis_result.get('confidence', 'unknown')}</p>
-"""
-        reasoning = diagnosis_result.get('reasoning', '')
-        if reasoning:
-            record_html += f"<p><strong>诊断依据</strong>: {reasoning[:200]}...</p>\n"
-        record_html += "</div>\n</details>\n\n"
-        
-        medications = treatment_plan.get('medications', [])
-        recommendations = treatment_plan.get('recommendations', '')
-        record_html += f"""
-<details style="margin: 5px 0;">
-<summary style="cursor: pointer;">✅ 步骤7: 治疗方案</summary>
-<div style="margin-left: 15px; font-size: 0.9em;">
-"""
-        if medications:
-            record_html += f"<p><strong>处方药物</strong>: {', '.join(medications[:5])}</p>\n"
-        if recommendations:
-            if isinstance(recommendations, str):
-                record_html += f"<p><strong>医嘱</strong>: {recommendations}</p>\n"
-            elif isinstance(recommendations, list):
-                record_html += f"<p><strong>医嘱</strong>: {', '.join(recommendations[:3])}</p>\n"
-        record_html += "</div>\n</details>\n\n"
-        
-        outcome_icon = "✅" if is_recovered else "⚠️"
-        record_html += f"""
-<details style="margin: 5px 0;">
-<summary style="cursor: pointer;">{outcome_icon} 步骤8: 康复评估</summary>
-<div style="margin-left: 15px; font-size: 0.9em;">
-"""
-        if is_recovered:
-            record_html += "<p>🎉 <strong>治疗成功！病人已康复</strong></p>\n"
-            if is_diagnosis_correct:
-                record_html += "<p>✅ 诊断正确</p>\n"
-            else:
-                record_html += f"<p>⚠️ 诊断有误</p>\n<p>错误诊断: {diagnosed_disease}</p>\n<p>正确诊断: {patient.disease}</p>\n"
-        else:
-            record_html += "<p>⚠️ 治疗效果不佳，建议复诊</p>\n"
-            if is_diagnosis_correct:
-                record_html += "<p>诊断正确，但需要调整治疗方案</p>\n"
-            else:
-                record_html += f"<p>❌ 诊断错误</p>\n<p>错误诊断: {diagnosed_disease}</p>\n<p>正确诊断: {patient.disease}</p>\n"
-        record_html += "</div>\n</details>\n"
-        
-        record_html += "</div>\n</details>\n"
-        
-        # 将记录添加到session_state（添加到列表开头，最新的在最上面）
-        if 'completed_treatments_display' not in st.session_state:
-            st.session_state.completed_treatments_display = []
-        st.session_state.completed_treatments_display.insert(0, record_html)
-        
         treatment_record['success'] = True
         
         # 保存记录到JSON文件
@@ -267,20 +153,15 @@ def treat_single_patient_with_visualization(patient, hospital, real_time_placeho
         return treatment_record
 
 
-def update_completed_records(completed_records_placeholder):
-    """更新已完成的治疗记录显示"""
-    with completed_records_placeholder.container():
-        if st.session_state.completed_treatments_display:
-            st.caption(f"共 {len(st.session_state.completed_treatments_display)} 条记录")
-            # 按时间倒序显示（最新的在最上面）
-            for record in st.session_state.completed_treatments_display:
-                st.markdown(record, unsafe_allow_html=True)
-        else:
-            st.info("暂无完成的治疗记录")
-
-
 def generate_and_treat_patient(num_patients, department_filter, real_time_placeholder, completed_records_placeholder):
-    """生成病人并进行治疗（支持暂停/继续/终止）"""
+    """生成病人并进行治疗（支持暂停/继续/终止）
+    
+    Args:
+        num_patients: 病人数量
+        department_filter: 科室筛选
+        real_time_placeholder: 实时进度占位符
+        completed_records_placeholder: 已完成记录占位符，用于动态更新
+    """
     hospital = st.session_state.hospital
     patient_gen = st.session_state.patient_gen
     
@@ -340,8 +221,10 @@ def generate_and_treat_patient(num_patients, department_filter, real_time_placeh
             # 使用可视化治疗，传递实时进度占位符
             record = treat_single_patient_with_visualization(patient, hospital, real_time_placeholder)
             
-            # 立即更新已完成的治疗记录显示
-            update_completed_records(completed_records_placeholder)
+            # 立即更新已完成记录显示（动态更新）
+            if completed_records_placeholder:
+                from ..views.treatment_page import render_completed_records_with_pagination
+                render_completed_records_with_pagination(completed_records_placeholder)
             
             # 记录到历史
             treatment_record = {

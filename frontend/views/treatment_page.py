@@ -5,64 +5,99 @@ import streamlit as st
 from ..components.treatment_flow import generate_and_treat_patient
 
 
-def render_completed_records_with_pagination():
-    """渲染已完成的治疗记录（带分页）"""
+def render_completed_records_with_pagination(container_placeholder=None):
+    """渲染已完成的治疗记录（带分页）
+    
+    Args:
+        container_placeholder: 可选的占位符，用于动态更新显示
+    """
     # 获取记录管理器
     records_manager = st.session_state.get('records_manager')
-    if not records_manager:
-        st.info("暂无完成的治疗记录")
-        return
     
-    # 获取总记录数
-    total_records = records_manager.get_total_count()
+    # 如果有占位符，使用占位符容器，否则直接渲染
+    if container_placeholder:
+        ctx = container_placeholder.container()
+    else:
+        ctx = st.container()
     
-    if total_records == 0:
-        st.info("暂无完成的治疗记录")
-        return
-    
-    # 获取分页参数
-    records_per_page = st.session_state.get('records_per_page', 10)
-    current_page = st.session_state.get('records_page', 0)
-    
-    # 计算总页数
-    total_pages = (total_records + records_per_page - 1) // records_per_page
-    
-    # 确保当前页码在有效范围内
-    if current_page >= total_pages:
-        current_page = total_pages - 1
-        st.session_state.records_page = current_page
-    if current_page < 0:
-        current_page = 0
-        st.session_state.records_page = current_page
-    
-    # 获取当前页的记录
-    offset = current_page * records_per_page
-    page_records = records_manager.get_records(limit=records_per_page, offset=offset)
-    
-    # 显示分页信息和控制按钮
-    col1, col2, col3, col4, col5 = st.columns([2, 1, 2, 1, 2])
-    
-    with col1:
-        if st.button("⬅️ 上一页", disabled=(current_page == 0)):
-            st.session_state.records_page = max(0, current_page - 1)
-            st.rerun()
-    
-    with col3:
-        st.markdown(f"<div style='text-align: center; padding-top: 5px;'><strong>第 {current_page + 1} 页 / 共 {total_pages} 页</strong></div>", unsafe_allow_html=True)
-    
-    with col5:
-        if st.button("下一页 ➡️", disabled=(current_page >= total_pages - 1)):
-            st.session_state.records_page = min(total_pages - 1, current_page + 1)
-            st.rerun()
-    
-    st.caption(f"共 {total_records} 条记录，每页显示 {records_per_page} 条")
-    st.divider()
-    
-    # 显示当前页的记录
-    for record in page_records:
-        # 从JSON记录构建显示HTML
-        record_html = _build_record_html(record)
-        st.markdown(record_html, unsafe_allow_html=True)
+    with ctx:
+        if not records_manager:
+            st.info("暂无完成的治疗记录")
+            return
+        
+        # 获取总记录数
+        total_records = records_manager.get_total_count()
+        
+        if total_records == 0:
+            st.info("暂无完成的治疗记录")
+            return
+        
+        # 获取分页参数
+        records_per_page = st.session_state.get('records_per_page', 10)
+        current_page = st.session_state.get('records_page', 0)
+        
+        # 计算总页数
+        total_pages = (total_records + records_per_page - 1) // records_per_page
+        
+        # 确保当前页码在有效范围内
+        if current_page >= total_pages:
+            current_page = total_pages - 1
+            st.session_state.records_page = current_page
+        if current_page < 0:
+            current_page = 0
+            st.session_state.records_page = current_page
+        
+        # 获取当前页的记录
+        offset = current_page * records_per_page
+        page_records = records_manager.get_records(limit=records_per_page, offset=offset)
+        
+        # 显示记录总数信息
+        st.markdown(f"""<div style='background-color: #f0f2f6; padding: 10px; border-radius: 5px; margin-bottom: 15px;'>
+            <strong>📊 记录统计：</strong>共 {total_records} 条记录 | 当前显示第 {current_page + 1} 页（共 {total_pages} 页）
+        </div>""", unsafe_allow_html=True)
+        
+        # 显示当前页的记录
+        for record in page_records:
+            # 从JSON记录构建显示HTML
+            record_html = _build_record_html(record)
+            st.markdown(record_html, unsafe_allow_html=True)
+        
+        st.divider()
+        
+        # 翻页控制按钮（移到底部，优化UI）
+        st.markdown("""<style>
+            div.stButton > button {
+                width: 100%;
+                border-radius: 8px;
+                font-weight: 600;
+                transition: all 0.3s;
+            }
+            div.stButton > button:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            }
+        </style>""", unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        
+        # 使用动态key避免在占位符模式下的key冲突
+        key_suffix = "_placeholder" if container_placeholder else ""
+        
+        with col1:
+            if st.button("⬅️ 上一页", disabled=(current_page == 0), use_container_width=True, key=f"prev_page{key_suffix}"):
+                st.session_state.records_page = max(0, current_page - 1)
+                st.rerun()
+        
+        with col2:
+            st.markdown(f"""<div style='text-align: center; padding: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                color: white; border-radius: 8px; font-weight: bold;'>
+                第 {current_page + 1} / {total_pages} 页
+            </div>""", unsafe_allow_html=True)
+        
+        with col3:
+            if st.button("下一页 ➡️", disabled=(current_page >= total_pages - 1), use_container_width=True, key=f"next_page{key_suffix}"):
+                st.session_state.records_page = min(total_pages - 1, current_page + 1)
+                st.rerun()
 
 
 def _build_record_html(record):
@@ -201,10 +236,6 @@ def _build_record_html(record):
 
 def render_treatment_page():
     """渲染治疗流程页面"""
-    # 初始化completed_treatments_display
-    if 'completed_treatments_display' not in st.session_state:
-        st.session_state.completed_treatments_display = []
-    
     # 实时治疗进度标题和占位符
     st.markdown("### 🎯 实时治疗流程")
     real_time_placeholder = st.empty()
@@ -213,6 +244,12 @@ def render_treatment_page():
     
     # 下半部分：已完成的治疗记录
     st.markdown("### 📋 已完成的治疗记录")
+    
+    # 创建已完成记录的占位符，用于动态更新
+    completed_records_placeholder = st.empty()
+    
+    # 【关键】先渲染一次历史记录，确保占位符始终有内容
+    render_completed_records_with_pagination(completed_records_placeholder)
     
     # 获取当前状态
     treatment_status = st.session_state.treatment_status
@@ -227,10 +264,7 @@ def render_treatment_page():
         num_patients = st.session_state.get('num_patients', 1)
         department_filter = st.session_state.get('department_filter', '全部')
         
-        # 创建一个临时占位符用于已完成记录
-        completed_records_placeholder = st.empty()
-        
-        # 传递占位符给治疗函数
+        # 调用治疗函数，传递占位符以实现动态更新
         result = generate_and_treat_patient(
             num_patients, 
             department_filter,
@@ -238,13 +272,15 @@ def render_treatment_page():
             completed_records_placeholder
         )
         
-        # 治疗完成后重置状态
+        # 治疗完成后重置状态并刷新页面
         if result == "completed":
             st.session_state.treatment_status = 'idle'
             st.session_state.treatment_control = None
+            st.rerun()
         elif result == "stopped":
             st.session_state.treatment_status = 'idle'
             st.session_state.treatment_control = None
+            st.rerun()
     else:
         # 显示提示信息
         with real_time_placeholder.container():
@@ -254,6 +290,3 @@ def render_treatment_page():
                 st.warning("⏸️ 治疗已暂停，点击'继续'按钮恢复治疗")
             elif treatment_status == 'stopped':
                 st.error("⏹️ 治疗已终止")
-    
-    # 显示已完成的记录（带分页）
-    render_completed_records_with_pagination()
