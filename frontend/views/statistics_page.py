@@ -11,10 +11,6 @@ from datetime import datetime, timedelta
 def render_statistics_page():
     """渲染统计页面 - 显示所有历史记录的完整统计"""
     st.title("📊 医院统计分析")
-    st.markdown("""<div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-        padding: 15px; border-radius: 10px; color: white; margin-bottom: 20px;'>
-        <h4 style='margin: 0; color: white;'>💡 基于所有历史治疗记录的全面数据分析</h4>
-    </div>""", unsafe_allow_html=True)
     
     # 获取记录管理器
     records_manager = st.session_state.get('records_manager')
