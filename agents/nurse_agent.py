@@ -30,6 +30,16 @@ class NurseAgent(BaseAgent):
         
         self.specialty = specialty
         self.departments_knowledge = self._load_departments_knowledge()
+        
+        # 构建科室别名映射表
+        self.department_alias_map = self._build_alias_map()
+        
+        # 分诊统计
+        self.triage_stats = {
+            'total_triages': 0,
+            'out_of_range_count': 0,  # 越界次数
+            'fallback_count': 0  # 回退到关键词匹配的次数
+        }
     
     def _load_departments_knowledge(self) -> List[Dict]:
         """加载科室知识"""
@@ -41,24 +51,34 @@ class NurseAgent(BaseAgent):
             # 如果无法加载配置，返回默认科室
             return [
                 {
+                    "id": "cardiology",
                     "name": "心脏科",
-                    "keywords": ["胸痛", "心悸", "呼吸困难", "心电图"]
+                    "keywords": ["胸痛", "心悸", "呼吸困难", "心电图"],
+                    "department_aliases": ["心内科"]
                 },
                 {
+                    "id": "neurology",
                     "name": "神经科",
-                    "keywords": ["头痛", "头晕", "抽搐", "麻木"]
+                    "keywords": ["头痛", "头晕", "抽搐", "麻木"],
+                    "department_aliases": ["神经内科"]
                 },
                 {
+                    "id": "pulmonology",
                     "name": "呼吸科",
-                    "keywords": ["咳嗽", "咳痰", "气短", "呼吸困难"]
+                    "keywords": ["咳嗽", "咳痰", "气短", "呼吸困难"],
+                    "department_aliases": ["呼吸内科"]
                 },
                 {
+                    "id": "gastroenterology",
                     "name": "消化科",
-                    "keywords": ["腹痛", "腹泻", "便秘", "呕吐"]
+                    "keywords": ["腹痛", "腹泻", "便秘", "呕吐"],
+                    "department_aliases": ["消化内科"]
                 },
                 {
+                    "id": "oncology",
                     "name": "肿瘤科",
-                    "keywords": ["肿块", "消瘦", "疼痛", "出血"]
+                    "keywords": ["肿块", "消瘦", "疼痛", "出血"],
+                    "department_aliases": ["肿瘤内科"]
                 }
             ]
     
@@ -125,6 +145,12 @@ class NurseAgent(BaseAgent):
         else:
             dept_list = "未找到明显相关的科室"
         
+        # 构建可用科室列表（用于LLM约束）
+        available_depts = "\n".join([
+            f"- {dept['name']} ({dept.get('name_en', '')})"
+            for dept in self.departments_knowledge
+        ])
+        
         # 使用提示词模板
         prompt = NURSE_TRIAGE_TEMPLATE.format(
             patient_name=patient_agent.name,
@@ -132,6 +158,7 @@ class NurseAgent(BaseAgent):
             patient_gender=patient_agent.gender,
             chief_complaint=chief_complaint,
             symptoms_text=symptoms_text,
+            available_departments_list=available_depts,
             department_list=dept_list
         )
         
@@ -152,7 +179,7 @@ class NurseAgent(BaseAgent):
                 triage_result = {
                     "recommended_departments": [
                         top_departments[0]['department']
-                    ] if department_scores else ["综合内科"],
+                    ] if department_scores else [self.departments_knowledge[0]['name']],
                     "reasoning": response,
                     "suggestions": "请前往推荐科室就诊"
                 }
@@ -161,10 +188,43 @@ class NurseAgent(BaseAgent):
             triage_result = {
                 "recommended_departments": [
                     d['department'] for d in department_scores[:2]
-                ] if department_scores else ["综合内科"],
+                ] if department_scores else [self.departments_knowledge[0]['name']],
                 "reasoning": response,
                 "suggestions": "请前往推荐科室就诊"
             }
+        
+        # 合法性校验和别名映射
+        self.triage_stats['total_triages'] += 1
+        validated_depts = []
+        
+        for dept_name in triage_result.get('recommended_departments', []):
+            # 尝试映射别名到标准名称
+            mapped_dept = self._map_department_name(dept_name)
+            
+            if mapped_dept:
+                validated_depts.append(mapped_dept)
+            else:
+                # 越界：推荐了不存在的科室
+                self.triage_stats['out_of_range_count'] += 1
+                self.add_thinking_step(
+                    "科室越界",
+                    f"LLM推荐的科室 '{dept_name}' 不在配置中，将回退到关键词匹配"
+                )
+        
+        # 如果所有推荐都无效，使用关键词匹配结果
+        if not validated_depts:
+            self.triage_stats['fallback_count'] += 1
+            if department_scores:
+                validated_depts = [department_scores[0]['department']]
+            else:
+                validated_depts = [self.departments_knowledge[0]['name']]
+            
+            self.add_thinking_step(
+                "回退到关键词匹配",
+                f"使用关键词匹配结果: {validated_depts[0]}"
+            )
+        
+        triage_result['recommended_departments'] = validated_depts
         
         self.add_thinking_step(
             "分诊完成",
@@ -290,6 +350,50 @@ class NurseAgent(BaseAgent):
 """
         
         return care_record
+    
+    def _build_alias_map(self) -> Dict[str, str]:
+        """构建科室别名到标准名称的映射"""
+        alias_map = {}
+        for dept in self.departments_knowledge:
+            standard_name = dept['name']
+            # 标准名称映射到自己
+            alias_map[standard_name] = standard_name
+            alias_map[standard_name.lower()] = standard_name
+            
+            # 添加所有别名
+            for alias in dept.get('department_aliases', []):
+                alias_map[alias] = standard_name
+                alias_map[alias.lower()] = standard_name
+        
+        return alias_map
+    
+    def _map_department_name(self, dept_name: str) -> Optional[str]:
+        """映射科室名称（包括别名）到标准名称"""
+        # 尝试直接匹配
+        if dept_name in self.department_alias_map:
+            return self.department_alias_map[dept_name]
+        
+        # 尝试小写匹配
+        if dept_name.lower() in self.department_alias_map:
+            return self.department_alias_map[dept_name.lower()]
+        
+        # 尝试模糊匹配
+        for alias, standard in self.department_alias_map.items():
+            if dept_name in alias or alias in dept_name:
+                return standard
+        
+        return None
+    
+    def get_triage_stats(self) -> Dict:
+        """获取分诊统计信息"""
+        stats = dict(self.triage_stats)
+        if stats['total_triages'] > 0:
+            stats['out_of_range_rate'] = stats['out_of_range_count'] / stats['total_triages']
+            stats['fallback_rate'] = stats['fallback_count'] / stats['total_triages']
+        else:
+            stats['out_of_range_rate'] = 0.0
+            stats['fallback_rate'] = 0.0
+        return stats
     
     def _get_current_time(self) -> str:
         """获取当前时间字符串"""

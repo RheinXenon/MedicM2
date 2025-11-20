@@ -5,6 +5,7 @@
       "name": "心脏科",
       "name_en": "Cardiology",
       "description": "专注于心血管系统疾病的诊断和治疗",
+      "department_aliases": ["心内科", "心血管内科", "循环内科"],
       "specialties": [
         "冠心病",
         "心律失常",
@@ -23,6 +24,7 @@
       "name": "神经科",
       "name_en": "Neurology",
       "description": "专注于神经系统疾病的诊断和治疗",
+      "department_aliases": ["神经内科", "脑科"],
       "specialties": [
         "脑卒中",
         "癫痫",
@@ -41,6 +43,7 @@
       "name": "肿瘤科",
       "name_en": "Oncology",
       "description": "专注于各种肿瘤的诊断和综合治疗",
+      "department_aliases": ["肿瘤内科", "癌症科"],
       "specialties": [
         "肺癌",
         "肝癌",
@@ -59,6 +62,7 @@
       "name": "呼吸科",
       "name_en": "Pulmonology",
       "description": "专注于呼吸系统疾病的诊断和治疗",
+      "department_aliases": ["呼吸内科", "胸科"],
       "specialties": [
         "肺炎",
         "慢性阻塞性肺病",
@@ -77,6 +81,7 @@
       "name": "消化科",
       "name_en": "Gastroenterology",
       "description": "专注于消化系统疾病的诊断和治疗",
+      "department_aliases": ["消化内科", "胃肠科"],
       "specialties": [
         "胃炎",
         "消化性溃疡",
@@ -88,6 +93,253 @@
       "keywords": [
         "腹痛", "腹泻", "便秘", "呕吐", "反酸",
         "黄疸", "消化不良", "胃部", "肠道", "肝脏"
+      ]
+    },
+    {
+      "id": "ent",
+      "name": "耳鼻喉科",
+      "name_en": "ENT (Otolaryngology)",
+      "description": "专注于耳鼻喉疾病的诊断和治疗",
+      "department_aliases": ["五官科", "耳鼻咽喉科"],
+      "specialties": [
+        "中耳炎",
+        "鼻窦炎",
+        "咽喉炎",
+        "扁桃体炎",
+        "听力障碍",
+        "声带疾病"
+      ],
+      "keywords": [
+        "耳痛", "耳鸣", "听力下降", "鼻塞", "流涕",
+        "咽痛", "声音嘶哑", "吞咽困难", "耳朵", "鼻子", "咽喉"
+      ]
+    },
+    {
+      "id": "endocrinology",
+      "name": "内分泌科",
+      "name_en": "Endocrinology",
+      "description": "专注于内分泌代谢疾病的诊断和治疗",
+      "department_aliases": ["内分泌代谢科", "糖尿病科"],
+      "specialties": [
+        "糖尿病",
+        "甲状腺疾病",
+        "肥胖症",
+        "骨质疏松",
+        "垂体疾病",
+        "肾上腺疾病"
+      ],
+      "keywords": [
+        "多饮", "多尿", "体重下降", "甲状腺肿大", "怕热",
+        "怕冷", "血糖", "甲状腺", "内分泌", "激素"
+      ]
+    },
+    {
+      "id": "dermatology",
+      "name": "皮肤科",
+      "name_en": "Dermatology",
+      "description": "专注于皮肤疾病的诊断和治疗",
+      "department_aliases": ["皮肤性病科"],
+      "specialties": [
+        "湿疹",
+        "银屑病",
+        "荨麻疹",
+        "痤疮",
+        "真菌感染",
+        "皮肤肿瘤"
+      ],
+      "keywords": [
+        "皮疹", "瘙痒", "红斑", "水疱", "脱屑",
+        "色素沉着", "皮损", "过敏", "皮肤", "斑块"
+      ]
+    },
+    {
+      "id": "rheumatology",
+      "name": "风湿免疫科",
+      "name_en": "Rheumatology",
+      "description": "专注于风湿免疫性疾病的诊断和治疗",
+      "department_aliases": ["风湿科", "免疫科"],
+      "specialties": [
+        "类风湿关节炎",
+        "系统性红斑狼疮",
+        "强直性脊柱炎",
+        "痛风",
+        "干燥综合征",
+        "硬皮病"
+      ],
+      "keywords": [
+        "关节痛", "关节肿胀", "晨僵", "肌肉疼痛", "口干",
+        "眼干", "皮疹", "发热", "关节", "免疫", "风湿"
+      ]
+    },
+    {
+      "id": "nephrology",
+      "name": "肾内科",
+      "name_en": "Nephrology",
+      "description": "专注于肾脏疾病的诊断和治疗",
+      "department_aliases": ["肾病科"],
+      "specialties": [
+        "慢性肾脏病",
+        "急性肾损伤",
+        "肾病综合征",
+        "肾炎",
+        "尿毒症",
+        "肾衰竭"
+      ],
+      "keywords": [
+        "水肿", "尿少", "尿多", "血尿", "蛋白尿",
+        "高血压", "肾功能", "肌酐", "尿素", "肾脏"
+      ]
+    },
+    {
+      "id": "orthopedics",
+      "name": "骨科",
+      "name_en": "Orthopedics",
+      "description": "专注于骨骼肌肉系统疾病的诊断和治疗",
+      "department_aliases": ["骨外科", "创伤骨科"],
+      "specialties": [
+        "骨折",
+        "关节脱位",
+        "腰椎间盘突出",
+        "骨关节炎",
+        "运动损伤",
+        "骨肿瘤"
+      ],
+      "keywords": [
+        "骨折", "关节痛", "腰痛", "颈痛", "活动受限",
+        "肿胀", "畸形", "外伤", "骨骼", "关节", "脊柱"
+      ]
+    },
+    {
+      "id": "general_surgery",
+      "name": "普外科",
+      "name_en": "General Surgery",
+      "description": "专注于腹部外科疾病的诊断和手术治疗",
+      "department_aliases": ["外科", "普通外科"],
+      "specialties": [
+        "阑尾炎",
+        "胆囊炎",
+        "疝气",
+        "甲状腺结节",
+        "乳腺肿块",
+        "肠梗阻"
+      ],
+      "keywords": [
+        "腹痛", "腹部包块", "呕吐", "便血", "疝",
+        "外伤", "甲状腺", "乳腺", "胆囊", "阑尾"
+      ]
+    },
+    {
+      "id": "urology",
+      "name": "泌尿外科",
+      "name_en": "Urology",
+      "description": "专注于泌尿系统疾病的诊断和治疗",
+      "department_aliases": ["泌尿科"],
+      "specialties": [
+        "尿路结石",
+        "前列腺疾病",
+        "膀胱炎",
+        "尿路感染",
+        "泌尿系肿瘤",
+        "肾结石"
+      ],
+      "keywords": [
+        "尿频", "尿急", "尿痛", "血尿", "排尿困难",
+        "腰痛", "前列腺", "膀胱", "结石", "泌尿"
+      ]
+    },
+    {
+      "id": "gynecology",
+      "name": "妇产科",
+      "name_en": "Gynecology & Obstetrics",
+      "description": "专注于女性生殖系统疾病和妊娠相关疾病的诊断和治疗",
+      "department_aliases": ["妇科", "产科"],
+      "specialties": [
+        "月经不调",
+        "妊娠",
+        "子宫肌瘤",
+        "卵巢囊肿",
+        "盆腔炎",
+        "不孕不育"
+      ],
+      "keywords": [
+        "月经", "白带", "腹痛", "妊娠", "阴道出血",
+        "盆腔", "子宫", "卵巢", "怀孕", "妇科"
+      ]
+    },
+    {
+      "id": "pediatrics",
+      "name": "儿科",
+      "name_en": "Pediatrics",
+      "description": "专注于儿童疾病的诊断和治疗",
+      "department_aliases": ["小儿科"],
+      "specialties": [
+        "儿童感冒",
+        "小儿肺炎",
+        "儿童哮喘",
+        "小儿腹泻",
+        "手足口病",
+        "生长发育问题"
+      ],
+      "keywords": [
+        "发热", "咳嗽", "腹泻", "呕吐", "皮疹",
+        "生长迟缓", "喂养困难", "小儿", "儿童", "婴幼儿"
+      ]
+    },
+    {
+      "id": "ophthalmology",
+      "name": "眼科",
+      "name_en": "Ophthalmology",
+      "description": "专注于眼部疾病的诊断和治疗",
+      "department_aliases": [],
+      "specialties": [
+        "白内障",
+        "青光眼",
+        "近视",
+        "结膜炎",
+        "视网膜疾病",
+        "干眼症"
+      ],
+      "keywords": [
+        "视力下降", "眼痛", "眼红", "流泪", "畏光",
+        "视物模糊", "眼压", "眼睛", "视力", "眼部"
+      ]
+    },
+    {
+      "id": "psychiatry",
+      "name": "精神科",
+      "name_en": "Psychiatry",
+      "description": "专注于精神心理疾病的诊断和治疗",
+      "department_aliases": ["心理科", "精神心理科"],
+      "specialties": [
+        "抑郁症",
+        "焦虑症",
+        "精神分裂症",
+        "双相情感障碍",
+        "失眠",
+        "强迫症"
+      ],
+      "keywords": [
+        "情绪低落", "焦虑", "失眠", "幻觉", "妄想",
+        "兴趣减退", "精神", "心理", "情绪", "睡眠障碍"
+      ]
+    },
+    {
+      "id": "emergency",
+      "name": "急诊科",
+      "name_en": "Emergency",
+      "description": "处理各类急症和危重症",
+      "department_aliases": ["急救科"],
+      "specialties": [
+        "急性心肌梗死",
+        "急性脑卒中",
+        "急性呼吸衰竭",
+        "休克",
+        "中毒",
+        "外伤"
+      ],
+      "keywords": [
+        "急性", "突发", "严重", "危重", "休克",
+        "昏迷", "大出血", "呼吸困难", "胸痛", "意识丧失"
       ]
     }
   ]

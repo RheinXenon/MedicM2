@@ -56,28 +56,54 @@ class AgentHospital:
         self.retriever = KnowledgeRetriever(self.vector_store)
         print(f"✓ 初始化知识库")
         
-        # 初始化病例库和经验库
-        self.case_base = MedicalCaseBase(storage_path=case_base_path)
-        self.experience_base = ExperienceBase(storage_path=experience_base_path)
-        print(f"✓ 病例库: {len(self.case_base)} 个案例")
-        print(f"✓ 经验库: {len(self.experience_base)} 条规则")
+        # 保存基础路径以便为每个科室创建子库
+        self.case_base_path = case_base_path
+        self.experience_base_path = experience_base_path
+        
+        # 为每个科室创建独立的病例库和经验库
+        self.department_case_bases = {}
+        self.department_experience_bases = {}
+        
+        total_cases = 0
+        total_rules = 0
+        for dept in self.departments:
+            dept_id = dept['id']
+            # 使用工厂方法创建，带缓存
+            case_base = MedicalCaseBase.get_instance(
+                storage_path=case_base_path,
+                department_id=dept_id
+            )
+            experience_base = ExperienceBase.get_instance(
+                storage_path=experience_base_path,
+                department_id=dept_id
+            )
+            
+            self.department_case_bases[dept_id] = case_base
+            self.department_experience_bases[dept_id] = experience_base
+            
+            total_cases += len(case_base)
+            total_rules += len(experience_base)
+        
+        print(f"✓ 科室病例库: 总计 {total_cases} 个案例")
+        print(f"✓ 科室经验库: 总计 {total_rules} 条规则")
         
         # 初始化护士Agents
         self.triage_nurse = NurseAgent(name="李护士", specialty="分诊")
         self.examination_nurse = NurseAgent(name="陈护士", specialty="检查")
         print(f"✓ 初始化护士团队")
         
-        # 初始化医生Agents
+        # 初始化医生Agents，为每个医生注入科室特定的知识库
         self.doctor_agents = {}
         for dept in self.departments:
+            dept_id = dept['id']
             doctor = EvolvingDoctorAgent(
                 department_info=dept,
                 retriever=self.retriever,
-                case_base=self.case_base,
-                experience_base=self.experience_base
+                case_base=self.department_case_bases[dept_id],
+                experience_base=self.department_experience_bases[dept_id]
             )
             self.doctor_agents[dept['name']] = doctor
-        print(f"✓ 初始化 {len(self.doctor_agents)} 位医生")
+        print(f"✓ 初始化 {len(self.doctor_agents)} 位医生（科室隔离知识库）")
         
         # 治疗记录
         self.treatment_records = []
@@ -267,6 +293,12 @@ class AgentHospital:
         
         # 保存治疗记录
         self.treatment_records.append(treatment_record)
+        treatment_record['department_case_base_size'] = len(
+            self.department_case_bases.get(
+                next((d['id'] for d in self.departments if d['name'] == recommended_dept), None),
+                []
+            )
+        ) if hasattr(self, 'department_case_bases') else 0
         
         if verbose:
             print("\n" + "=" * 60)
@@ -385,14 +417,19 @@ class AgentHospital:
         print(f"  成功治疗: {self.stats['successful_treatments']} ({success_rate:.1f}%)")
         print(f"  治疗失败: {self.stats['failed_treatments']}")
         
-        print(f"\n病例库统计:")
-        case_stats = self.case_base.get_stats()
-        print(f"  总案例数: {case_stats['total_cases']}")
+        print(f"\n病例库统计（按科室）:")
+        for dept_id, case_base in self.department_case_bases.items():
+            case_stats = case_base.get_stats()
+            if case_stats['total_cases'] > 0:
+                dept_name = next((d['name'] for d in self.departments if d['id'] == dept_id), dept_id)
+                print(f"  {dept_name}: {case_stats['total_cases']} 个案例")
         
-        print(f"\n经验库统计:")
-        exp_stats = self.experience_base.get_stats()
-        print(f"  总规则数: {exp_stats['total_rules']}")
-        print(f"  成功应用: {exp_stats['successful_applications']}")
+        print(f"\n经验库统计（按科室）:")
+        for dept_id, exp_base in self.department_experience_bases.items():
+            exp_stats = exp_base.get_stats()
+            if exp_stats['total_rules'] > 0:
+                dept_name = next((d['name'] for d in self.departments if d['id'] == dept_id), dept_id)
+                print(f"  {dept_name}: {exp_stats['total_rules']} 条规则 (成功应用: {exp_stats['successful_applications']})")
         
         print(f"\n各科室统计:")
         for dept_name, doctor in self.doctor_agents.items():
@@ -430,12 +467,25 @@ class AgentHospital:
         """获取指定科室的医生"""
         return self.doctor_agents.get(department_name)
     
+    def get_department_stats(self) -> Dict:
+        """获取所有科室的统计信息"""
+        dept_stats = {}
+        for dept_id in self.department_case_bases.keys():
+            dept_name = next((d['name'] for d in self.departments if d['id'] == dept_id), dept_id)
+            dept_stats[dept_name] = {
+                'cases': len(self.department_case_bases[dept_id]),
+                'rules': len(self.department_experience_bases[dept_id])
+            }
+        return dept_stats
+    
     def __str__(self):
+        total_cases = sum(len(cb) for cb in self.department_case_bases.values())
+        total_rules = sum(len(eb) for eb in self.department_experience_bases.values())
         return (
             f"Agent Hospital\n"
             f"  科室数: {len(self.departments)}\n"
             f"  医生数: {len(self.doctor_agents)}\n"
-            f"  病例库: {len(self.case_base)} 案例\n"
-            f"  经验库: {len(self.experience_base)} 规则\n"
+            f"  病例库: {total_cases} 案例（科室隔离）\n"
+            f"  经验库: {total_rules} 规则（科室隔离）\n"
             f"  总治疗: {self.stats['total_patients']} 病人"
         )

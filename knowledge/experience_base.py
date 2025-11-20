@@ -15,17 +15,33 @@ class ExperienceBase:
     经验库
     根据论文 "Agent Hospital" 实现
     当医生诊断失败时，通过反思生成经验规则，避免重复错误
+    支持科室隔离存储
     """
     
-    def __init__(self, storage_path: str = "./knowledge/experience_base"):
+    # 类级别缓存，避免重复加载
+    _instances = {}
+    
+    def __init__(
+        self,
+        storage_path: str = "./knowledge/experience_base",
+        department_id: str = None
+    ):
         """
         初始化经验库
         
         Args:
-            storage_path: 经验库存储路径
+            storage_path: 经验库基础存储路径
+            department_id: 科室ID，如果指定则为该科室创建独立存储
         """
-        self.storage_path = storage_path
-        os.makedirs(storage_path, exist_ok=True)
+        self.department_id = department_id
+        
+        # 如果指定科室ID，使用科室子目录
+        if department_id:
+            self.storage_path = os.path.join(storage_path, department_id)
+        else:
+            self.storage_path = storage_path
+        
+        os.makedirs(self.storage_path, exist_ok=True)
         
         # 内存中的经验索引
         self.rules = []  # 所有规则列表
@@ -45,6 +61,27 @@ class ExperienceBase:
         
         # 加载已有规则
         self._load_rules()
+    
+    @classmethod
+    def get_instance(
+        cls,
+        storage_path: str = "./knowledge/experience_base",
+        department_id: str = None
+    ):
+        """
+        获取经验库实例（带缓存）
+        
+        Args:
+            storage_path: 经验库基础存储路径
+            department_id: 科室ID
+            
+        Returns:
+            经验库实例
+        """
+        cache_key = f"{storage_path}:{department_id or 'global'}"
+        if cache_key not in cls._instances:
+            cls._instances[cache_key] = cls(storage_path, department_id)
+        return cls._instances[cache_key]
     
     def add_rule(self, rule_data: Dict) -> str:
         """

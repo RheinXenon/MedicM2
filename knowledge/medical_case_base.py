@@ -15,17 +15,33 @@ class MedicalCaseBase:
     医疗病例库
     根据论文 "Agent Hospital" 实现
     存储成功诊断和治疗的案例，支持相似案例检索
+    支持科室隔离存储
     """
     
-    def __init__(self, storage_path: str = "./knowledge/case_base"):
+    # 类级别缓存，避免重复加载
+    _instances = {}
+    
+    def __init__(
+        self, 
+        storage_path: str = "./knowledge/case_base",
+        department_id: str = None
+    ):
         """
         初始化病例库
         
         Args:
-            storage_path: 病例库存储路径
+            storage_path: 病例库基础存储路径
+            department_id: 科室ID，如果指定则为该科室创建独立存储
         """
-        self.storage_path = storage_path
-        os.makedirs(storage_path, exist_ok=True)
+        self.department_id = department_id
+        
+        # 如果指定科室ID，使用科室子目录
+        if department_id:
+            self.storage_path = os.path.join(storage_path, department_id)
+        else:
+            self.storage_path = storage_path
+        
+        os.makedirs(self.storage_path, exist_ok=True)
         
         # 内存中的病例索引
         self.cases = []  # 所有病例列表
@@ -43,6 +59,27 @@ class MedicalCaseBase:
         
         # 加载已有病例
         self._load_cases()
+    
+    @classmethod
+    def get_instance(
+        cls,
+        storage_path: str = "./knowledge/case_base",
+        department_id: str = None
+    ):
+        """
+        获取病例库实例（带缓存）
+        
+        Args:
+            storage_path: 病例库基础存储路径
+            department_id: 科室ID
+            
+        Returns:
+            病例库实例
+        """
+        cache_key = f"{storage_path}:{department_id or 'global'}"
+        if cache_key not in cls._instances:
+            cls._instances[cache_key] = cls(storage_path, department_id)
+        return cls._instances[cache_key]
     
     def add_case(self, case_data: Dict) -> str:
         """
