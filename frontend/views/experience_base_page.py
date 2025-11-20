@@ -23,7 +23,13 @@ def render_experience_base_page():
         dept_id_to_name = {}
         
         for dept_id, exp_base in hospital.department_experience_bases.items():
-            if len(exp_base) > 0:
+            # 安全获取规则数量
+            try:
+                rule_count = len(exp_base.rules) if hasattr(exp_base, 'rules') else 0
+            except:
+                rule_count = 0
+            
+            if rule_count > 0:
                 dept_name = next(
                     (d['name'] for d in hospital.departments if d['id'] == dept_id),
                     dept_id
@@ -44,15 +50,23 @@ def render_experience_base_page():
             if dept_filter == "全部":
                 # 收集所有科室的规则（最多20条）
                 for exp_base in hospital.department_experience_bases.values():
-                    rules.extend(exp_base.rules)
-                    if len(rules) >= 20:
-                        break
+                    try:
+                        if hasattr(exp_base, 'rules') and isinstance(exp_base.rules, list):
+                            rules.extend(exp_base.rules)
+                            if len(rules) >= 20:
+                                break
+                    except Exception as e:
+                        st.warning(f"读取规则时出错: {e}")
+                        continue
                 rules = rules[:20]
             else:
                 # 获取特定科室的规则
                 dept_id = dept_id_to_name[dept_filter]
-                exp_base = hospital.department_experience_bases[dept_id]
-                rules = exp_base.rules[:20]
+                exp_base = hospital.department_experience_bases.get(dept_id)
+                if exp_base and hasattr(exp_base, 'rules') and isinstance(exp_base.rules, list):
+                    rules = exp_base.rules[:20]
+                else:
+                    rules = []
             
             if rules:
                 st.write(f"共找到 {len(rules)} 条相关规则（最多显示20条）")
