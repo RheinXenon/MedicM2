@@ -231,10 +231,14 @@ class NurseAgent(BaseAgent):
             f"推荐科室: {', '.join(triage_result['recommended_departments'])}"
         )
         
-        # 4. 返回分诊结果
+        # 4. 返回分诊结果（包含患者的完整信息）
         result = {
             'patient_id': patient_agent.patient_id,
             'patient_name': patient_agent.name,
+            'patient_age': patient_agent.age,
+            'patient_gender': patient_agent.gender,
+            'symptoms': patient_agent.symptoms,  # 添加原始症状列表
+            'medical_history': patient_agent.medical_history if hasattr(patient_agent, 'medical_history') else [],
             'chief_complaint': chief_complaint,
             'recommended_departments': triage_result['recommended_departments'],
             'reasoning': triage_result['reasoning'],
@@ -242,7 +246,7 @@ class NurseAgent(BaseAgent):
             'triage_nurse': self.name,
             'thinking_process': self.get_thinking_process()
         }
-        
+
         return result
     
     def conduct_examination(

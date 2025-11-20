@@ -27,22 +27,30 @@ def treat_single_patient_with_visualization(patient, hospital, real_time_placeho
         'patient_name': patient.name,
         'ground_truth_disease': patient.disease,
         'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        'events': []
+        'events': [],
+        # 添加完整的患者档案信息
+        'patient_profile': {
+            'age': patient.age,
+            'gender': patient.gender,
+            'symptoms': patient.symptoms,  # 保存完整的症状列表
+            'medical_history': patient.medical_history if hasattr(patient, 'medical_history') else [],
+            'chief_complaint': ', '.join(patient.symptoms[:5]) if patient.symptoms else '无明显症状'
+        }
     }
-    
+
     try:
         # 步骤1: 病例输入
         with step1.container():
             st.text("🔵 步骤1: 病例输入...")
         time.sleep(0.2)
-        
+
         step1_info = {
             'name': patient.name,
             'age': patient.age,
             'gender': patient.gender,
             'symptoms': ', '.join(patient.symptoms[:5])
         }
-        
+
         with step1.container():
             st.text("✅ 步骤1: 病例输入")
         

@@ -121,32 +121,40 @@ def render_pagination_controls():
 
 
 def _build_record_html(record):
-    """从JSON记录构建显示HTML"""
+    """从JSON记录构建显示HTML - 显示所有详细信息"""
+    # 基本信息
     patient_name = record.get('patient_name', '未知')
+    patient_id = record.get('patient_id', '未知')
     disease = record.get('ground_truth_disease', '未知')
     timestamp = record.get('timestamp', '未知时间')
-    
+
     outcome = record.get('outcome', {})
     is_diagnosis_correct = outcome.get('is_diagnosis_correct', False)
     is_recovered = outcome.get('is_recovered', False)
-    
+
     diagnosis_status = "✅ 诊断正确" if is_diagnosis_correct else "❌ 诊断错误"
     treatment_status = "✅ 治疗成功" if is_recovered else "⚠️ 治疗失败"
-    
+
     # 获取详细信息
     triage = record.get('triage', {})
-    recommended_dept = triage.get('recommended_departments', ['未知'])[0] if triage.get('recommended_departments') else '未知'
-    
+    recommended_depts = triage.get('recommended_departments', ['未知'])
+    recommended_dept = recommended_depts[0] if recommended_depts else '未知'
+    triage_reasoning = triage.get('reasoning', '基于症状分析')
+    triage_severity = triage.get('severity', '未知')
+
     diagnosis = record.get('diagnosis', {})
     diagnosed_disease = diagnosis.get('disease', '未知')
     confidence = diagnosis.get('confidence', 'unknown')
     reasoning = diagnosis.get('reasoning', '')
-    
+    differential_diagnosis = diagnosis.get('differential_diagnosis', [])
+
     examinations = record.get('examinations', {})
     treatment_plan = diagnosis.get('treatment_plan', {})
     medications = treatment_plan.get('medications', [])
     recommendations = treatment_plan.get('recommendations', '')
-    
+    precautions = treatment_plan.get('precautions', [])
+    follow_up = treatment_plan.get('follow_up', '')
+
     # 构建HTML
     record_html = f"""
 <details>
@@ -156,101 +164,305 @@ def _build_record_html(record):
 <div style="padding: 10px; margin-left: 20px; border-left: 2px solid #ddd;">
 
 <details style="margin: 5px 0;">
-<summary style="cursor: pointer;">✅ 步骤1: 病例输入</summary>
+<summary style="cursor: pointer;">✅ 步骤1: 病例输入（完整信息）</summary>
 <div style="margin-left: 15px; font-size: 0.9em;">
+    <p><strong>患者ID</strong>: {patient_id}</p>
     <p><strong>姓名</strong>: {patient_name}</p>
-    <p><strong>疾病</strong>: {disease}</p>
-</div>
+    <p><strong>真实疾病</strong>: {disease}</p>
+"""
+
+    # 优先从triage中提取患者信息（新数据）
+    patient_age = None
+    patient_gender = None
+    patient_symptoms = []
+    patient_history = []
+
+    if 'patient_age' in triage:
+        patient_age = triage['patient_age']
+    if 'patient_gender' in triage:
+        patient_gender = triage['patient_gender']
+    if 'symptoms' in triage:
+        patient_symptoms = triage['symptoms']
+    if 'medical_history' in triage:
+        patient_history = triage['medical_history']
+
+    # 如果triage中没有，尝试从patient_profile中获取（兼容旧数据）
+    if 'patient_profile' in record:
+        profile = record['patient_profile']
+        if not patient_age and 'age' in profile:
+            patient_age = profile['age']
+        if not patient_gender and 'gender' in profile:
+            patient_gender = profile['gender']
+        if not patient_symptoms and 'symptoms' in profile:
+            patient_symptoms = profile['symptoms']
+        if not patient_history and 'medical_history' in profile:
+            patient_history = profile['medical_history']
+
+    # 显示患者基本信息
+    if patient_age:
+        record_html += f"    <p><strong>年龄</strong>: {patient_age}岁</p>\n"
+    if patient_gender:
+        record_html += f"    <p><strong>性别</strong>: {patient_gender}</p>\n"
+
+    # 显示完整的症状列表（分行显示，更清晰）
+    if patient_symptoms:
+        if isinstance(patient_symptoms, list) and patient_symptoms:
+            record_html += f"    <p><strong>症状列表</strong>（共{len(patient_symptoms)}个）:</p>\n"
+            record_html += "    <div style='background-color: #fff3cd; padding: 10px; margin: 5px 0; border-left: 3px solid #ffc107;'>\n"
+            for i, symptom in enumerate(patient_symptoms, 1):
+                record_html += f"        <p style='margin: 2px 0;'>{i}. {symptom}</p>\n"
+            record_html += "    </div>\n"
+        elif isinstance(patient_symptoms, str):
+            record_html += f"    <p><strong>症状</strong>: {patient_symptoms}</p>\n"
+
+    # 显示既往病史
+    if patient_history:
+        if isinstance(patient_history, list) and patient_history:
+            record_html += f"    <p><strong>既往病史</strong>:</p>\n"
+            record_html += "    <div style='background-color: #f0f8ff; padding: 10px; margin: 5px 0; border-left: 3px solid #007bff;'>\n"
+            for h in patient_history:
+                record_html += f"        <p style='margin: 2px 0;'>• {h}</p>\n"
+            record_html += "    </div>\n"
+        elif patient_history:
+            record_html += f"    <p><strong>既往病史</strong>: {patient_history}</p>\n"
+    else:
+        record_html += "    <p><strong>既往病史</strong>: 无特殊病史</p>\n"
+
+    record_html += """</div>
 </details>
 
 <details style="margin: 5px 0;">
-<summary style="cursor: pointer;">✅ 步骤2: 智能分诊</summary>
+<summary style="cursor: pointer;">✅ 步骤2: 智能分诊（完整分析）</summary>
 <div style="margin-left: 15px; font-size: 0.9em;">
-    <p><strong>推荐科室</strong>: {recommended_dept}</p>
-    <p><strong>理由</strong>: {triage.get('reasoning', '基于症状分析')}</p>
-</div>
+"""
+
+    # 显示患者主诉
+    chief_complaint = triage.get('chief_complaint', '')
+    if chief_complaint:
+        record_html += "    <p><strong>患者主诉</strong>:</p>\n"
+        record_html += f"    <div style='background-color: #f9f9f9; padding: 10px; margin: 5px 0; border-left: 3px solid #28a745; white-space: pre-wrap; word-wrap: break-word;'>{chief_complaint}</div>\n"
+
+    # 显示推荐科室
+    if len(recommended_depts) > 1:
+        record_html += f"    <p><strong>推荐科室</strong>: {', '.join(recommended_depts)}</p>\n"
+    else:
+        record_html += f"    <p><strong>推荐科室</strong>: {recommended_dept}</p>\n"
+
+    # 显示严重程度
+    if triage_severity and triage_severity != '未知':
+        record_html += f"    <p><strong>严重程度</strong>: {triage_severity}</p>\n"
+
+    # 显示分诊理由（完整显示，不截断）
+    if triage_reasoning:
+        record_html += "    <p><strong>分诊理由</strong>:</p>\n"
+        record_html += f"    <div style='background-color: #e7f3ff; padding: 10px; margin: 5px 0; white-space: pre-wrap; word-wrap: break-word;'>{triage_reasoning}</div>\n"
+
+    # 显示建议
+    triage_suggestions = triage.get('suggestions', '')
+    if triage_suggestions:
+        record_html += "    <p><strong>就诊建议</strong>:</p>\n"
+        record_html += f"    <div style='background-color: #fff3cd; padding: 10px; margin: 5px 0; white-space: pre-wrap;'>{triage_suggestions}</div>\n"
+
+    # 添加分诊的症状分析
+    if 'symptom_analysis' in triage:
+        record_html += f"    <p><strong>症状分析</strong>: {triage['symptom_analysis']}</p>\n"
+
+    record_html += """</div>
 </details>
 
 <details style="margin: 5px 0;">
 <summary style="cursor: pointer;">✅ 步骤3: 挂号登记</summary>
 <div style="margin-left: 15px; font-size: 0.9em;">
-    <p>已挂号至 <strong>{recommended_dept}</strong></p>
+    <p>已挂号至 <strong>""" + recommended_dept + """</strong></p>
 </div>
 </details>
 
 <details style="margin: 5px 0;">
-<summary style="cursor: pointer;">✅ 步骤4: 医生问诊</summary>
-<div style="margin-left: 15px; font-size: 0.9em;">
-    <p><strong>需要检查</strong>: {', '.join(examinations.keys()) if examinations else '无'}</p>
-</div>
-</details>
-
-<details style="margin: 5px 0;">
-<summary style="cursor: pointer;">✅ 步骤5: 医学检查</summary>
+<summary style="cursor: pointer;">✅ 步骤4: 医生问诊（需要检查项目）</summary>
 <div style="margin-left: 15px; font-size: 0.9em;">
 """
-    
-    for exam_type, result in examinations.items():
-        record_html += f"<p><strong>{exam_type}</strong>: {result.get('result', '正常')}</p>\n"
-    
+
+    if examinations:
+        record_html += f"    <p><strong>需要检查项目</strong>: {', '.join(examinations.keys())}</p>\n"
+        record_html += f"    <p><strong>检查项目数量</strong>: {len(examinations)}项</p>\n"
+    else:
+        record_html += "    <p><strong>无需额外检查</strong></p>\n"
+
     record_html += """</div>
 </details>
 
 <details style="margin: 5px 0;">
-<summary style="cursor: pointer;">✅ 步骤6: 医生诊断</summary>
+<summary style="cursor: pointer;">✅ 步骤5: 医学检查（完整结果）</summary>
+<div style="margin-left: 15px; font-size: 0.9em;">
+"""
+
+    if examinations:
+        for exam_type, exam_data in examinations.items():
+            record_html += f"    <div style='background-color: #f9f9f9; padding: 8px; margin: 5px 0; border-left: 3px solid #4CAF50;'>\n"
+            record_html += f"        <p><strong>🔬 {exam_type}</strong></p>\n"
+
+            if isinstance(exam_data, dict):
+                if 'result' in exam_data:
+                    record_html += f"        <p><strong>结果</strong>: {exam_data['result']}</p>\n"
+                if 'details' in exam_data:
+                    record_html += f"        <p><strong>详情</strong>: {exam_data['details']}</p>\n"
+                if 'abnormal_findings' in exam_data:
+                    findings = exam_data['abnormal_findings']
+                    if findings:
+                        record_html += f"        <p><strong>异常发现</strong>: {findings}</p>\n"
+                if 'interpretation' in exam_data:
+                    record_html += f"        <p><strong>解读</strong>: {exam_data['interpretation']}</p>\n"
+                # 显示所有其他键值
+                for key, value in exam_data.items():
+                    if key not in ['result', 'details', 'abnormal_findings', 'interpretation']:
+                        record_html += f"        <p><strong>{key}</strong>: {value}</p>\n"
+            else:
+                record_html += f"        <p>{exam_data}</p>\n"
+
+            record_html += "    </div>\n"
+    else:
+        record_html += "    <p>无检查记录</p>\n"
+
+    record_html += """</div>
+</details>
+
+<details style="margin: 5px 0;">
+<summary style="cursor: pointer;">✅ 步骤6: 医生诊断（完整诊断依据）</summary>
 <div style="margin-left: 15px; font-size: 0.9em;">
     <p><strong>诊断结果</strong>: """ + diagnosed_disease + """</p>
     <p><strong>置信度</strong>: """ + str(confidence) + """</p>
 """
-    
+
+    # 显示完整的诊断依据（不截断）
     if reasoning:
-        record_html += f"<p><strong>诊断依据</strong>: {reasoning[:200]}...</p>\n"
-    
+        # 将长文本分段显示
+        record_html += f"    <p><strong>诊断依据</strong>:</p>\n"
+        record_html += f"    <div style='background-color: #f9f9f9; padding: 10px; margin: 5px 0; white-space: pre-wrap; word-wrap: break-word;'>{reasoning}</div>\n"
+
+    # 显示鉴别诊断
+    if differential_diagnosis:
+        record_html += "    <p><strong>鉴别诊断</strong>:</p>\n"
+        if isinstance(differential_diagnosis, list):
+            for dd in differential_diagnosis:
+                if isinstance(dd, dict):
+                    dd_name = dd.get('disease', dd.get('name', '未知'))
+                    dd_prob = dd.get('probability', dd.get('likelihood', ''))
+                    record_html += f"    <p style='margin-left: 15px;'>• {dd_name}"
+                    if dd_prob:
+                        record_html += f" (可能性: {dd_prob})"
+                    record_html += "</p>\n"
+                else:
+                    record_html += f"    <p style='margin-left: 15px;'>• {dd}</p>\n"
+        else:
+            record_html += f"    <p>{differential_diagnosis}</p>\n"
+
+    # 显示诊断过程中的其他信息
+    for key in ['analysis', 'clinical_findings', 'laboratory_findings']:
+        if key in diagnosis and diagnosis[key]:
+            record_html += f"    <p><strong>{key.replace('_', ' ').title()}</strong>: {diagnosis[key]}</p>\n"
+
     record_html += """</div>
 </details>
 
 <details style="margin: 5px 0;">
-<summary style="cursor: pointer;">✅ 步骤7: 治疗方案</summary>
+<summary style="cursor: pointer;">✅ 步骤7: 治疗方案（完整方案）</summary>
 <div style="margin-left: 15px; font-size: 0.9em;">
 """
-    
+
+    # 显示所有处方药物（不限制数量）
     if medications:
-        record_html += f"<p><strong>处方药物</strong>: {', '.join(medications[:5])}</p>\n"
+        record_html += "    <p><strong>处方药物</strong>:</p>\n"
+        if isinstance(medications, list):
+            for i, med in enumerate(medications, 1):
+                if isinstance(med, dict):
+                    med_name = med.get('name', med.get('medication', ''))
+                    med_dosage = med.get('dosage', '')
+                    med_frequency = med.get('frequency', '')
+                    med_duration = med.get('duration', '')
+
+                    record_html += f"    <p style='margin-left: 15px;'>{i}. <strong>{med_name}</strong>"
+                    if med_dosage:
+                        record_html += f" - 剂量: {med_dosage}"
+                    if med_frequency:
+                        record_html += f" - 频率: {med_frequency}"
+                    if med_duration:
+                        record_html += f" - 疗程: {med_duration}"
+                    record_html += "</p>\n"
+                else:
+                    record_html += f"    <p style='margin-left: 15px;'>{i}. {med}</p>\n"
+        else:
+            record_html += f"    <p>{medications}</p>\n"
+
+    # 显示完整的医嘱
     if recommendations:
-        if isinstance(recommendations, str):
-            record_html += f"<p><strong>医嘱</strong>: {recommendations}</p>\n"
-        elif isinstance(recommendations, list):
-            record_html += f"<p><strong>医嘱</strong>: {', '.join(recommendations[:3])}</p>\n"
-    
+        record_html += "    <p><strong>医嘱建议</strong>:</p>\n"
+        if isinstance(recommendations, list):
+            for rec in recommendations:
+                record_html += f"    <p style='margin-left: 15px;'>• {rec}</p>\n"
+        else:
+            record_html += f"    <div style='background-color: #f9f9f9; padding: 10px; margin: 5px 0; white-space: pre-wrap;'>{recommendations}</div>\n"
+
+    # 显示注意事项
+    if precautions:
+        record_html += "    <p><strong>注意事项</strong>:</p>\n"
+        if isinstance(precautions, list):
+            for prec in precautions:
+                record_html += f"    <p style='margin-left: 15px;'>• {prec}</p>\n"
+        else:
+            record_html += f"    <p>{precautions}</p>\n"
+
+    # 显示随访计划
+    if follow_up:
+        record_html += f"    <p><strong>随访计划</strong>: {follow_up}</p>\n"
+
+    # 显示治疗方案中的其他信息
+    for key in ['therapy', 'lifestyle_changes', 'diet_recommendations']:
+        if key in treatment_plan and treatment_plan[key]:
+            record_html += f"    <p><strong>{key.replace('_', ' ').title()}</strong>: {treatment_plan[key]}</p>\n"
+
     outcome_icon = "✅" if is_recovered else "⚠️"
     record_html += f"""</div>
 </details>
 
 <details style="margin: 5px 0;">
-<summary style="cursor: pointer;">{outcome_icon} 步骤8: 康复评估</summary>
+<summary style="cursor: pointer;">{outcome_icon} 步骤8: 康复评估（详细结果）</summary>
 <div style="margin-left: 15px; font-size: 0.9em;">
 """
-    
+
     if is_recovered:
-        record_html += "<p>🎉 <strong>治疗成功！病人已康复</strong></p>\n"
+        record_html += "    <p>🎉 <strong>治疗成功！病人已康复</strong></p>\n"
         if is_diagnosis_correct:
-            record_html += "<p>✅ 诊断正确</p>\n"
+            record_html += "    <p>✅ 诊断正确</p>\n"
         else:
-            record_html += f"<p>⚠️ 诊断有误</p>\n<p>错误诊断: {diagnosed_disease}</p>\n<p>正确诊断: {disease}</p>\n"
+            record_html += f"    <p>⚠️ 诊断有误</p>\n"
+            record_html += f"    <p><strong>错误诊断</strong>: {diagnosed_disease}</p>\n"
+            record_html += f"    <p><strong>正确诊断</strong>: {disease}</p>\n"
     else:
-        record_html += "<p>⚠️ 治疗效果不佳，建议复诊</p>\n"
+        record_html += "    <p>⚠️ 治疗效果不佳，建议复诊</p>\n"
         if is_diagnosis_correct:
-            record_html += "<p>诊断正确，但需要调整治疗方案</p>\n"
+            record_html += "    <p>✅ 诊断正确，但需要调整治疗方案</p>\n"
         else:
-            record_html += f"<p>❌ 诊断错误</p>\n<p>错误诊断: {diagnosed_disease}</p>\n<p>正确诊断: {disease}</p>\n"
-    
+            record_html += f"    <p>❌ 诊断错误</p>\n"
+            record_html += f"    <p><strong>错误诊断</strong>: {diagnosed_disease}</p>\n"
+            record_html += f"    <p><strong>正确诊断</strong>: {disease}</p>\n"
+
+    # 显示康复评估的详细信息
+    if 'recovery_details' in outcome:
+        record_html += f"    <p><strong>康复详情</strong>: {outcome['recovery_details']}</p>\n"
+    if 'satisfaction' in outcome:
+        record_html += f"    <p><strong>患者满意度</strong>: {outcome['satisfaction']}</p>\n"
+    if 'side_effects' in outcome:
+        effects = outcome['side_effects']
+        if effects:
+            record_html += f"    <p><strong>副作用</strong>: {effects}</p>\n"
+
     record_html += """</div>
 </details>
 
 </div>
 </details>
 """
-    
+
     return record_html
 
 
