@@ -311,7 +311,8 @@ class AgentHospital:
         self,
         patient_agents: List,
         verbose: bool = False,
-        progress_interval: int = 10
+        progress_interval: int = 10,
+        record_callback=None
     ) -> List[Dict]:
         """
         批量模拟病人治疗
@@ -320,6 +321,7 @@ class AgentHospital:
             patient_agents: 病人Agent列表
             verbose: 是否打印详细信息
             progress_interval: 进度报告间隔
+            record_callback: 每完成一个病人后的回调函数，接收 record 参数
             
         Returns:
             治疗记录列表
@@ -330,6 +332,13 @@ class AgentHospital:
         for i, patient in enumerate(patient_agents, 1):
             record = self.simulate_patient_treatment(patient, verbose=verbose)
             records.append(record)
+            
+            # 调用回调函数（如果提供）
+            if record_callback is not None:
+                try:
+                    record_callback(record)
+                except Exception as e:
+                    print(f"\n⚠️  保存记录时出错: {e}")
             
             if i % progress_interval == 0 or i == len(patient_agents):
                 self._print_progress(i, len(patient_agents))

@@ -2,6 +2,9 @@
 Agent Hospital 控制台批量模拟脚本
 支持命令行参数配置，自动保存详细治疗记录和统计信息
 
+【新功能】实时保存：每完成一个病人就保存到 treatment_records.json
+这样即使用户手动终止（Ctrl+C），已完成的记录也会保存！
+
 使用示例：
     # 基础用法：模拟10个病人（默认）
     python run_simulation.py
@@ -13,11 +16,14 @@ Agent Hospital 控制台批量模拟脚本
     # 显示详细过程：观察完整的8个事件治疗流程
     python run_simulation.py -n 5 -v
     
-    # 大批量模拟：100个病人（不显示详细过程，仅统计）
+    # 大批量模拟：100个病人（不显示详细过程，实时保存到treatment_records.json）
     python run_simulation.py -n 100
     
     # 不保存详细记录：仅保存统计摘要
     python run_simulation.py -n 50 --no-save-details
+    
+    # 不实时保存到treatment_records.json（仅保存到simulation_results）
+    python run_simulation.py -n 100 --no-realtime-save
     
     # 指定输出目录
     python run_simulation.py -n 20 -o ./my_results
@@ -37,20 +43,27 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from simulation.agent_hospital import AgentHospital
 from simulation.patient_generator import PatientGenerator
+from frontend.utils.treatment_records_manager import TreatmentRecordsManager
 
 
 class SimulationRunner:
     """医院模拟运行器"""
     
-    def __init__(self, output_dir: str = "./simulation_results"):
+    def __init__(self, output_dir: str = "./simulation_results", enable_realtime_save: bool = True):
         """
         初始化模拟运行器
         
         Args:
             output_dir: 输出目录
+            enable_realtime_save: 是否启用实时保存到 treatment_records.json
         """
         self.output_dir = output_dir
+        self.enable_realtime_save = enable_realtime_save
         os.makedirs(output_dir, exist_ok=True)
+        
+        # 初始化治疗记录管理器（用于实时保存）
+        if enable_realtime_save:
+            self.records_manager = TreatmentRecordsManager()
         
         print("\n" + "=" * 70)
         print(" " * 15 + "🏥 Agent Hospital 模拟系统")
@@ -101,6 +114,7 @@ class SimulationRunner:
         print(f"  • 科室筛选: {department_filter or '全部科室'}")
         print(f"  • 详细日志: {'是' if verbose else '否'}")
         print(f"  • 保存详细记录: {'是' if save_details else '否'}")
+        print(f"  • 实时保存到 treatment_records.json: {'是' if self.enable_realtime_save else '否'}")
         print()
         
         # 生成病人
@@ -128,10 +142,16 @@ class SimulationRunner:
         start_time = datetime.now()
         
         # 批量治疗
+        # 定义实时保存回调函数
+        def save_record_callback(record):
+            if self.enable_realtime_save:
+                self.records_manager.save_record(record)
+        
         records = self.hospital.simulate_batch_treatments(
             patients,
             verbose=verbose,
-            progress_interval=max(1, num_patients // 10)  # 动态调整进度报告间隔
+            progress_interval=max(1, num_patients // 10),  # 动态调整进度报告间隔
+            record_callback=save_record_callback if self.enable_realtime_save else None
         )
         
         # 记录结束时间
@@ -322,16 +342,19 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例用法:
-  # 模拟10个病人（全部科室）
+  # 模拟10个病人（全部科室，实时保存到treatment_records.json）
   python run_simulation.py -n 10
   
   # 模拟20个心脏科病人，显示详细过程
   python run_simulation.py -n 20 -d 心脏科 -v
   
-  # 模拟50个病人，不显示详细过程
-  python run_simulation.py -n 50 --no-verbose
+  # 模拟100个病人，每完成一个就保存（即使中断也有记录）
+  python run_simulation.py -n 100
   
-  # 模拟100个病人，不保存详细记录（仅保存统计）
+  # 模拟50个病人，不实时保存（仅保存到simulation_results）
+  python run_simulation.py -n 50 --no-realtime-save
+  
+  # 模拟100个病人，不保存详细记录（仅保存统计摘要）
   python run_simulation.py -n 100 --no-save-details
         """
     )
@@ -386,6 +409,13 @@ def main():
         help='输出目录（默认: ./simulation_results）'
     )
     
+    parser.add_argument(
+        '--no-realtime-save',
+        action='store_true',
+        default=False,
+        help='不实时保存到 treatment_records.json（默认会实时保存）'
+    )
+    
     args = parser.parse_args()
     
     # 处理verbose参数
@@ -394,9 +424,15 @@ def main():
     # 处理save_details参数
     save_details = args.save_details and not args.no_save_details
     
+    # 处理realtime_save参数
+    enable_realtime_save = not args.no_realtime_save
+    
     try:
         # 创建模拟运行器
-        runner = SimulationRunner(output_dir=args.output_dir)
+        runner = SimulationRunner(
+            output_dir=args.output_dir,
+            enable_realtime_save=enable_realtime_save
+        )
         
         # 运行模拟
         stats = runner.run_batch_simulation(
