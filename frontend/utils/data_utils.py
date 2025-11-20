@@ -28,8 +28,8 @@ def get_hospital_stats():
 - **治疗失败：** {stats['failed_treatments']}
 
 ### 知识库
-- **病例库案例数：** {len(hospital.case_base)}
-- **经验库规则数：** {len(hospital.experience_base)}
+- **病例库总案例数：** {sum(len(cb) for cb in hospital.department_case_bases.values())}
+- **经验库总规则数：** {sum(len(eb) for eb in hospital.department_experience_bases.values())}
 
 ### 各科室医生表现
 """
@@ -100,18 +100,35 @@ def get_case_base_info():
     if hospital is None:
         return "请先初始化系统"
     
-    stats = hospital.case_base.get_stats()
+    # 聚合所有科室的病例库统计
+    total_cases = 0
+    dept_stats = {}
+    
+    for dept_id, case_base in hospital.department_case_bases.items():
+        stats = case_base.get_stats()
+        count = stats.get('total_cases', 0)
+        total_cases += count
+        
+        # 找到科室名称
+        dept_name = next(
+            (d['name'] for d in hospital.departments if d['id'] == dept_id),
+            dept_id
+        )
+        if count > 0:
+            dept_stats[dept_name] = count
     
     md = f"""## 📚 病例库详情
 
-**总案例数：** {stats['total_cases']}
-**成功案例：** {stats['successful_cases']}
+**总案例数：** {total_cases}
 
 ### 各科室案例分布
 """
     
-    for dept, count in stats['by_department'].items():
-        md += f"- **{dept}：** {count} 个案例\n"
+    if dept_stats:
+        for dept, count in sorted(dept_stats.items(), key=lambda x: x[1], reverse=True):
+            md += f"- **{dept}：** {count} 个案例\n"
+    else:
+        md += "暂无案例\n"
     
     return md
 
@@ -123,18 +140,40 @@ def get_experience_base_info():
     if hospital is None:
         return "请先初始化系统"
     
-    stats = hospital.experience_base.get_stats()
+    # 聚合所有科室的经验库统计
+    total_rules = 0
+    total_success = 0
+    total_failed = 0
+    dept_stats = {}
+    
+    for dept_id, exp_base in hospital.department_experience_bases.items():
+        stats = exp_base.get_stats()
+        count = stats.get('total_rules', 0)
+        total_rules += count
+        total_success += stats.get('successful_applications', 0)
+        total_failed += stats.get('failed_applications', 0)
+        
+        # 找到科室名称
+        dept_name = next(
+            (d['name'] for d in hospital.departments if d['id'] == dept_id),
+            dept_id
+        )
+        if count > 0:
+            dept_stats[dept_name] = count
     
     md = f"""## 🧠 经验库详情
 
-**总规则数：** {stats['total_rules']}
-**成功应用：** {stats['successful_applications']} 次
-**失败应用：** {stats['failed_applications']} 次
+**总规则数：** {total_rules}
+**成功应用：** {total_success} 次
+**失败应用：** {total_failed} 次
 
 ### 各科室规则分布
 """
     
-    for dept, count in stats['by_department'].items():
-        md += f"- **{dept}：** {count} 条规则\n"
+    if dept_stats:
+        for dept, count in sorted(dept_stats.items(), key=lambda x: x[1], reverse=True):
+            md += f"- **{dept}：** {count} 条规则\n"
+    else:
+        md += "暂无规则\n"
     
     return md

@@ -164,13 +164,13 @@ def test_doctor_evolution():
     print(f"\n进化效果:")
     print(f"  诊断准确率提升: {accuracy_improvement:+.2%}")
     
-    # 检查病例库和经验库
-    case_stats = hospital.case_base.get_stats()
-    exp_stats = hospital.experience_base.get_stats()
+    # 检查病例库和经验库（聚合所有科室）
+    total_cases = sum(len(cb) for cb in hospital.department_case_bases.values())
+    total_rules = sum(len(eb) for eb in hospital.department_experience_bases.values())
     
     print(f"\n知识积累:")
-    print(f"  病例库案例数: {case_stats['total_cases']}")
-    print(f"  经验库规则数: {exp_stats['total_rules']}")
+    print(f"  病例库案例数: {total_cases}")
+    print(f"  经验库规则数: {total_rules}")
     
     return {
         'batch1_stats': stats_after_batch1,

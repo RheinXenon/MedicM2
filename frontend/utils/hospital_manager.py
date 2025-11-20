@@ -62,8 +62,8 @@ def initialize_hospital():
 **科室列表：**
 {', '.join([dept['name'] for dept in st.session_state.hospital.departments])}
 
-**病例库：** {len(st.session_state.hospital.case_base)} 个案例
-**经验库：** {len(st.session_state.hospital.experience_base)} 条规则
+**病例库：** {sum(len(cb) for cb in st.session_state.hospital.department_case_bases.values())} 个案例
+**经验库：** {sum(len(eb) for eb in st.session_state.hospital.department_experience_bases.values())} 条规则
 """
         return True, status
     
@@ -84,9 +84,12 @@ def clear_knowledge_bases():
         return "请先初始化系统"
     
     try:
-        hospital.case_base.clear()
-        hospital.experience_base.clear()
-        return "✅ 知识库已清空"
+        # 清空所有科室的知识库
+        for case_base in hospital.department_case_bases.values():
+            case_base.clear()
+        for exp_base in hospital.department_experience_bases.values():
+            exp_base.clear()
+        return "✅ 所有科室的知识库已清空"
     except Exception as e:
         return f"❌ 清空失败：{str(e)}"
 

@@ -17,66 +17,90 @@ def render_experience_base_page():
     st.markdown("### 🔍 查看具体规则")
     
     hospital = st.session_state.hospital
-    if hospital and len(hospital.experience_base) > 0:
-        # 按科室筛选
-        dept_filter = st.selectbox(
-            "选择科室",
-            ["全部"] + list(hospital.experience_base.department_index.keys()),
-            key="exp_dept_filter"
-        )
+    if hospital:
+        # 收集所有有规则的科室
+        dept_options = []
+        dept_id_to_name = {}
         
-        # 获取规则
-        if dept_filter == "全部":
-            rules = hospital.experience_base.rules[:20]  # 最多显示20个
-        else:
-            rule_ids = hospital.experience_base.department_index.get(dept_filter, [])[:20]
-            rules = [hospital.experience_base.rule_index[rid] for rid in rule_ids]
+        for dept_id, exp_base in hospital.department_experience_bases.items():
+            if len(exp_base) > 0:
+                dept_name = next(
+                    (d['name'] for d in hospital.departments if d['id'] == dept_id),
+                    dept_id
+                )
+                dept_options.append(dept_name)
+                dept_id_to_name[dept_name] = dept_id
         
-        if rules:
-            st.write(f"共找到 {len(rules)} 条相关规则（最多显示20条）")
+        if dept_options:
+            # 按科室筛选
+            dept_filter = st.selectbox(
+                "选择科室",
+                ["全部"] + sorted(dept_options),
+                key="exp_dept_filter"
+            )
             
-            for i, rule in enumerate(rules, 1):
-                # 计算成功率
-                success_rate = (rule['success_count'] / rule['application_count']) if rule['application_count'] > 0 else 0
-                confidence = rule.get('confidence', 0)
+            # 获取规则
+            rules = []
+            if dept_filter == "全部":
+                # 收集所有科室的规则（最多20条）
+                for exp_base in hospital.department_experience_bases.values():
+                    rules.extend(exp_base.rules)
+                    if len(rules) >= 20:
+                        break
+                rules = rules[:20]
+            else:
+                # 获取特定科室的规则
+                dept_id = dept_id_to_name[dept_filter]
+                exp_base = hospital.department_experience_bases[dept_id]
+                rules = exp_base.rules[:20]
+            
+            if rules:
+                st.write(f"共找到 {len(rules)} 条相关规则（最多显示20条）")
                 
-                status_icon = "✅" if rule['status'] == 'active' else "⚠️"
-                
-                with st.expander(f"{status_icon} 规则 {i}: {rule.get('disease', '未知')} - {rule.get('department', '未知科室')} (置信度: {confidence:.2f})"):
-                    st.write(f"**规则 ID:** {rule.get('rule_id', '未知')}")
-                    st.write(f"**创建时间:** {rule.get('timestamp', '未知')[:19]}")
-                    st.write(f"**状态:** {rule['status']}")
-                    st.write(f"**应用次数:** {rule['application_count']}")
-                    st.write(f"**成功次数:** {rule['success_count']}")
-                    st.write(f"**成功率:** {success_rate:.1%}")
+                for i, rule in enumerate(rules, 1):
+                    # 计算成功率
+                    success_rate = (rule['success_count'] / rule['application_count']) if rule['application_count'] > 0 else 0
+                    confidence = rule.get('confidence', 0)
                     
-                    st.write(f"**规则内容:**")
-                    st.info(rule.get('rule_content', '无'))
+                    status_icon = "✅" if rule['status'] == 'active' else "⚠️"
                     
-                    st.write(f"**推荐行动:**")
-                    st.write(rule.get('recommendation', '无'))
-                    
-                    if 'reasoning' in rule:
-                        st.write(f"**规则依据:**")
-                        st.write(rule['reasoning'])
-                    
-                    if 'trigger_conditions' in rule:
-                        st.write(f"**触发条件:**")
-                        trigger = rule['trigger_conditions']
-                        if 'symptoms' in trigger:
-                            st.write(f"- 症状: {', '.join(trigger['symptoms'])}")
-                        if 'age_range' in trigger:
-                            st.write(f"- 年龄范围: {trigger['age_range']}")
-                    
-                    if 'source_case' in rule:
-                        st.write(f"**来源案例:**")
-                        source = rule['source_case']
-                        st.write(f"- 错误诊断: {source.get('wrong_diagnosis', '未知')}")
-                        st.write(f"- 正确诊断: {source.get('correct_diagnosis', '未知')}")
+                    with st.expander(f"{status_icon} 规则 {i}: {rule.get('disease', '未知')} - {rule.get('department', '未知科室')} (置信度: {confidence:.2f})"):
+                        st.write(f"**规则 ID:** {rule.get('rule_id', '未知')}")
+                        st.write(f"**创建时间:** {rule.get('timestamp', '未知')[:19]}")
+                        st.write(f"**状态:** {rule['status']}")
+                        st.write(f"**应用次数:** {rule['application_count']}")
+                        st.write(f"**成功次数:** {rule['success_count']}")
+                        st.write(f"**成功率:** {success_rate:.1%}")
+                        
+                        st.write(f"**规则内容:**")
+                        st.info(rule.get('rule_content', '无'))
+                        
+                        st.write(f"**推荐行动:**")
+                        st.write(rule.get('recommendation', '无'))
+                        
+                        if 'reasoning' in rule:
+                            st.write(f"**规则依据:**")
+                            st.write(rule['reasoning'])
+                        
+                        if 'trigger_conditions' in rule:
+                            st.write(f"**触发条件:**")
+                            trigger = rule['trigger_conditions']
+                            if 'symptoms' in trigger:
+                                st.write(f"- 症状: {', '.join(trigger['symptoms'])}")
+                            if 'age_range' in trigger:
+                                st.write(f"- 年龄范围: {trigger['age_range']}")
+                        
+                        if 'source_case' in rule:
+                            st.write(f"**来源案例:**")
+                            source = rule['source_case']
+                            st.write(f"- 错误诊断: {source.get('wrong_diagnosis', '未知')}")
+                            st.write(f"- 正确诊断: {source.get('correct_diagnosis', '未知')}")
+            else:
+                st.info("该科室暂无规则")
         else:
-            st.info("该科室暂无规则")
+            st.info("经验库为空，当医生出现误诊时会自动生成规则")
     else:
-        st.info("经验库为空，当医生出现误诊时会自动生成规则")
+        st.info("请先初始化系统")
     
     st.divider()
     if st.button("🔄 刷新经验库", key="refresh_exp"):

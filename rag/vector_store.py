@@ -150,7 +150,7 @@ class VectorStore:
     
     def get_collection(self, department_id: str) -> chromadb.Collection:
         """
-        获取指定科室的集合
+        获取指定科室的集合，如果不存在则自动创建
         
         Args:
             department_id: 科室ID
@@ -159,7 +159,14 @@ class VectorStore:
             ChromaDB Collection对象
         """
         collection_name = f"dept_{department_id}"
-        return self.client.get_collection(name=collection_name)
+        try:
+            return self.client.get_collection(name=collection_name)
+        except:
+            # Collection不存在，自动创建空collection
+            return self.client.create_collection(
+                name=collection_name,
+                metadata={"department": department_id}
+            )
     
     def delete_collection(self, department_id: str):
         """

@@ -69,7 +69,13 @@ class KnowledgeRetriever:
             return documents
         
         except Exception as e:
-            print(f"检索失败: {str(e)}")
+            error_msg = str(e)
+            if "does not exist" in error_msg:
+                # Collection不存在，这是正常情况（该科室暂无外部知识库）
+                pass  # 静默处理，不打印警告
+            else:
+                # 其他错误才打印
+                print(f"知识库检索失败: {error_msg}")
             return []
     
     def retrieve_with_scores(
