@@ -44,28 +44,41 @@ OPENAI_MODEL=gpt-4-turbo-preview
 ```bash
 # 启动 Web 可视化界面
 python start_hospital.py
-
-# 或直接运行
-python app_hospital.py
 ```
 
-在浏览器中访问 `http://localhost:7860`，可以：
+在浏览器中访问 `http://localhost:8501`，可以：
 - 实时观察治疗过程
 - 查看医生进化统计
 - 可视化病例库和经验库
 - 交互式生成和治疗病人
 
-**方式2：命令行模式**
+**方式2：控制台批量模拟 💻**
 
 ```bash
-# 主程序 - 批量模拟
-python RUN_AGENT_HOSPITAL.py
+# 基础用法：模拟10个病人
+python run_simulation.py -n 10
 
-# 测试套件 - 验证功能
+# 科室筛选：模拟20个心脏科病人
+python run_simulation.py -n 20 -d 心脏科
+
+# 显示详细过程：观察完整治疗流程
+python run_simulation.py -n 5 -v
+
+# 大批量模拟：100个病人（不显示详细过程）
+python run_simulation.py -n 100
+```
+
+**方式3：功能测试**
+
+```bash
+# 完整测试套件
 python test_agent_hospital.py
 
-# 使用示例 - 学习使用
-python example_usage.py
+# 单个病人治疗测试
+python test_agent_hospital.py --test single
+
+# 医生进化测试
+python test_agent_hospital.py --test evolution
 ```
 
 ## 🏥 系统架构
@@ -122,45 +135,56 @@ Agent Hospital
 - 💾 保存当前状态
 - �️ 清空知识库重新训练
 
-## �📊 运行示例
+## 📊 运行示例
 
-### 可视化界面操作流程
-
-1. 启动界面：`python start_hospital.py`
-2. 点击"初始化系统"
-3. 设置病人数量（如：5）
-4. 选择科室（如：心脏科）
-5. 点击"开始治疗"
-6. 观察实时日志和统计图表
-
-### 命令行测试医生进化
+### 控制台批量模拟（推荐用于数据生成）
 
 ```bash
+# 快速模拟10个病人
+python run_simulation.py -n 10
+
+# 输出示例：
+# ✅ 治疗成功: 8/10 (80.0%)
+# 🎯 诊断正确: 7/10 (70.0%)
+# 📚 病例库: 15 个案例
+# 📚 经验库: 5 条规则
+```
+
+**高级用法：**
+```bash
+# 心脏科专项模拟（50个病人）
+python run_simulation.py -n 50 -d 心脏科
+
+# 大批量模拟（无详细日志，仅统计）
+python run_simulation.py -n 200
+
+# 详细观察治疗过程（适合学习）
+python run_simulation.py -n 3 -v
+```
+
+结果自动保存到 `simulation_results/` 目录：
+- `simulation_*.json` - 完整治疗记录
+- `summary_*.json` - 统计摘要
+- `report_*.txt` - 可读文本报告
+
+### 可视化界面操作
+
+1. 启动：`python start_hospital.py`
+2. 初始化系统
+3. 设置参数（病人数、科室）
+4. 开始治疗
+5. 实时观察流程和统计
+
+### 功能测试
+
+```bash
+# 医生进化测试
 python test_agent_hospital.py --test evolution
+
+# 输出示例：
+# 第一批: 5个病人 → 准确率 65.0%
+# 第二批: 5个病人 → 准确率 80.0% ⬆ +15%
 ```
-
-输出示例：
-```
-第一批: 治疗5个病人
-  诊断准确率: 65.0%
-  治疗成功率: 60.0%
-
-第二批: 再治疗5个病人  
-  诊断准确率: 80.0%  ⬆ +15%
-  治疗成功率: 75.0%  ⬆ +15%
-
-病例库: 7个案例
-经验库: 3条规则
-```
-
-### 批量模拟治疗
-
-```bash
-python RUN_AGENT_HOSPITAL.py
-# 输入病人数量，如：20
-```
-
-结果自动保存到 `simulation_results/` 目录。
 
 ## 🎯 主要功能
 
@@ -206,17 +230,16 @@ python RUN_AGENT_HOSPITAL.py
 
 | 文件 | 说明 |
 |------|------|
-| `app_hospital.py` | 🎨 **可视化Web界面** |
-| `start_hospital.py` | 🚀 启动脚本 |
-| `RUN_AGENT_HOSPITAL.py` | 命令行批量模拟 |
-| `test_agent_hospital.py` | 测试脚本 |
-| `example_usage.py` | 使用示例 |
-| `agents/patient_agent.py` | 病人Agent |
-| `agents/nurse_agent.py` | 护士Agent |
-| `agents/evolving_doctor_agent.py` | 医生Agent |
-| `knowledge/medical_case_base.py` | 病例库 |
-| `knowledge/experience_base.py` | 经验库 |
-| `simulation/agent_hospital.py` | 医院模拟器 |
+| `start_hospital.py` | 🚀 启动Web可视化界面 |
+| `run_simulation.py` | 💻 **控制台批量模拟（推荐）** |
+| `test_agent_hospital.py` | 🧪 功能测试套件 |
+| `frontend/app.py` | 🎨 Streamlit可视化主程序 |
+| `simulation/agent_hospital.py` | 🏥 医院模拟核心 |
+| `agents/evolving_doctor_agent.py` | 👨‍⚕️ 可进化医生Agent |
+| `agents/nurse_agent.py` | 👩‍⚕️ 护士Agent（分诊+检查） |
+| `simulation/patient_generator.py` | 🤒 病人生成器 |
+| `knowledge/medical_case_base.py` | 📚 病例库 |
+| `knowledge/experience_base.py` | 🧠 经验库 |
 
 ## 🎓 论文参考
 
