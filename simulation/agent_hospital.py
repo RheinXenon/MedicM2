@@ -4,10 +4,11 @@ Agent Hospital - 模拟医院系统
 """
 import json
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 from agents.nurse_agent import NurseAgent
 from agents.evolving_doctor_agent import EvolvingDoctorAgent
+from agents.consultation_agent import ConsultationCoordinatorAgent
 from knowledge.medical_case_base import MedicalCaseBase
 from knowledge.experience_base import ExperienceBase
 from rag.vector_store import VectorStore
@@ -90,6 +91,7 @@ class AgentHospital:
         # 初始化护士Agents
         self.triage_nurse = NurseAgent(name="李护士", specialty="分诊")
         self.examination_nurse = NurseAgent(name="陈护士", specialty="检查")
+        self.consultation_agent = ConsultationCoordinatorAgent()
         print(f"✓ 初始化护士团队")
         
         # 初始化医生Agents，为每个医生注入科室特定的知识库
@@ -126,185 +128,202 @@ class AgentHospital:
         verbose: bool = True
     ) -> Dict:
         """
-        模拟完整的病人治疗流程
-        
-        Args:
-            patient_agent: 病人Agent对象
-            verbose: 是否打印详细信息
-            
-        Returns:
-            治疗记录字典
+        模拟完整的病人治疗流程，支持多科室协同与会诊
         """
         if verbose:
             print("\n" + "=" * 60)
             print(f"开始治疗病人: {patient_agent.name}")
             print("=" * 60)
-        
+
         treatment_record = {
             'patient_id': patient_agent.patient_id,
             'patient_name': patient_agent.name,
             'ground_truth_disease': patient_agent.disease,
-            'events': []
+            'events': [],
+            'department_sessions': []
         }
-        
+
         try:
-            # 事件1: 疾病发作 (Disease Onset)
+            # 事件1: 疾病发作
             if verbose:
                 print("\n[事件1] 疾病发作")
             treatment_record['events'].append({
                 'event_type': 'disease_onset',
                 'description': f"{patient_agent.name} 感到不适，决定就医"
             })
-            
-            # 事件2: 分诊 (Triage)
+
+            # 事件2: 分诊
             if verbose:
                 print("\n[事件2] 分诊")
             triage_result = self.triage_nurse.triage(patient_agent)
             treatment_record['triage'] = triage_result
-            
-            recommended_dept = triage_result['recommended_departments'][0]
-            if verbose:
-                print(f"  → 分诊护士推荐科室: {recommended_dept}")
-            
-            # 事件3: 挂号 (Registration)
-            if verbose:
-                print("\n[事件3] 挂号")
-            treatment_record['events'].append({
-                'event_type': 'registration',
-                'department': recommended_dept,
-                'description': f"病人挂号至 {recommended_dept}"
-            })
-            
-            # 获取对应科室的医生
-            if recommended_dept not in self.doctor_agents:
-                # 如果推荐的科室不存在，使用第一个科室
-                recommended_dept = list(self.doctor_agents.keys())[0]
-                if verbose:
-                    print(f"  ⚠ 科室不存在，转至 {recommended_dept}")
-            
-            doctor = self.doctor_agents[recommended_dept]
-            
-            # 事件4: 问诊 (Consultation)
-            if verbose:
-                print(f"\n[事件4] 问诊 - {doctor.name}")
-            
-            # 医生决定需要的检查
-            examination_types = self._determine_examinations(
-                patient_agent,
-                doctor
-            )
-            
-            if verbose:
-                print(f"  → 需要进行检查: {', '.join(examination_types)}")
-            
-            # 事件5: 医学检查 (Medical Examination)
-            if verbose:
-                print("\n[事件5] 医学检查")
-            
-            examination_results = {}
-            for exam_type in examination_types:
-                exam_result = self.examination_nurse.conduct_examination(
+
+            # 构建分诊队列
+            pending_departments = [
+                dept for dept in triage_result['recommended_departments']
+                if dept in self.doctor_agents
+            ] or [list(self.doctor_agents.keys())[0]]
+
+            visited_departments = set()
+            current_department = pending_departments.pop(0)
+            consultation_requested = False
+            latest_diagnosis = None
+            last_doctor_agent = None
+            aggregated_examinations = dict(patient_agent.examination_reports)
+
+            # 事件3+: 挂号及多科室会诊
+            session_index = 0
+            while current_department:
+                session_index += 1
+                visited_departments.add(current_department)
+
+                treatment_record['events'].append({
+                    'event_type': 'registration',
+                    'department': current_department,
+                    'description': f"第{session_index}次挂号 - {current_department}"
+                })
+
+                session_record, diagnosis_result, doctor = self._run_department_session(
                     patient_agent,
-                    exam_type
+                    current_department,
+                    aggregated_examinations,
+                    verbose
                 )
-                examination_results[exam_type] = exam_result
-                
+
+                session_record['sequence'] = session_index
+                treatment_record['department_sessions'].append(session_record)
+                last_doctor_agent = doctor
+                latest_diagnosis = diagnosis_result
+
+                next_action = diagnosis_result.get('next_action', 'continue')
+                suggested_departments = diagnosis_result.get('suggested_departments') or []
+                self._enqueue_departments(
+                    pending_departments,
+                    suggested_departments,
+                    visited_departments
+                )
+
+                treatment_record['events'].append({
+                    'event_type': 'department_session',
+                    'department': current_department,
+                    'next_action': next_action,
+                    'diagnosed_disease': diagnosis_result.get('disease')
+                })
+
+                if next_action == 'handoff':
+                    current_department = self._pop_next_department(
+                        pending_departments,
+                        visited_departments
+                    ) or self._get_fallback_department(visited_departments)
+                    if current_department:
+                        continue
+                    break
+                elif next_action == 'consult':
+                    consultation_requested = True
+                    current_department = self._pop_next_department(
+                        pending_departments,
+                        visited_departments
+                    )
+                    if current_department:
+                        continue
+                    break
+                else:
+                    break
+
+            if latest_diagnosis is None:
+                latest_diagnosis = {
+                    'disease': '未生成诊断',
+                    'diagnosis_reasoning': '流程异常，未得到医生诊断',
+                    'treatment_plan': {},
+                    'confidence': 'low'
+                }
+
+            # 事件6: 会诊或最终诊断
+            if consultation_requested and len(treatment_record['department_sessions']) > 1:
                 if verbose:
-                    print(f"  → 完成 {exam_type}")
-            
-            treatment_record['examinations'] = examination_results
-            
-            # 事件6: 诊断 (Diagnosis)
+                    print("\n[会诊] 启动多科室联合会诊")
+                final_diagnosis = self._run_consultation(patient_agent, treatment_record['department_sessions'])
+            else:
+                final_diagnosis = latest_diagnosis
+
+            treatment_record['diagnosis'] = final_diagnosis
+
             if verbose:
-                print(f"\n[事件6] 诊断 - {doctor.name}")
-            
-            diagnosis_result = doctor.diagnose_with_evolution(
-                patient_agent,
-                examination_results
-            )
-            
-            treatment_record['diagnosis'] = diagnosis_result
-            
-            if verbose:
-                print(f"  → 诊断: {diagnosis_result.get('disease', '未知')}")
-                print(f"  → 置信度: {diagnosis_result.get('confidence', 'unknown')}")
-            
-            # 病人接收诊断
-            patient_reaction = patient_agent.receive_diagnosis(diagnosis_result)
-            
-            # 事件7: 取药/治疗 (Medicine Dispensary)
+                print(f"\n[最终诊断] {final_diagnosis.get('disease', '未知')} (置信度: {final_diagnosis.get('confidence', 'unknown')})")
+
+            # 病人接收诊断与治疗
+            patient_agent.receive_diagnosis(final_diagnosis)
+
             if verbose:
                 print("\n[事件7] 治疗方案")
-            
-            treatment_plan = diagnosis_result.get('treatment_plan', {})
+
+            treatment_plan = final_diagnosis.get('treatment_plan', {})
             patient_agent.receive_treatment(treatment_plan)
-            
-            if verbose:
-                medications = treatment_plan.get('medications', [])
-                if medications:
-                    print(f"  → 处方药物: {', '.join(medications[:3])}")
-            
+
             treatment_record['events'].append({
                 'event_type': 'medicine_dispensary',
                 'treatment_plan': treatment_plan
             })
-            
-            # 事件8: 康复评估 (Convalescence)
+
+            # 事件8: 康复评估
             if verbose:
                 print("\n[事件8] 康复评估")
-            
+
             treatment_outcome = patient_agent.evaluate_treatment_outcome()
             treatment_record['outcome'] = treatment_outcome
-            
+
             if verbose:
                 if treatment_outcome['is_recovered']:
-                    print(f"  ✓ 治疗成功！病人康复")
+                    print("  ✓ 治疗成功！病人康复")
                 else:
-                    print(f"  ✗ 治疗效果不佳，可能需要复诊")
-                
+                    print("  ✗ 治疗效果不佳，可能需要复诊")
+
                 if treatment_outcome['is_diagnosis_correct']:
-                    print(f"  ✓ 诊断正确")
+                    print("  ✓ 诊断正确")
                 else:
-                    print(f"  ✗ 诊断错误")
-                    print(f"    错误诊断: {diagnosis_result.get('disease')}")
+                    print("  ✗ 诊断错误")
+                    print(f"    错误诊断: {final_diagnosis.get('disease')}")
                     print(f"    正确诊断: {patient_agent.disease}")
-            
-            # 医生从治疗结果中学习
-            doctor.learn_from_treatment_outcome(
-                patient_agent,
-                diagnosis_result,
-                treatment_outcome
-            )
-            
-            # 更新统计
+
+            if last_doctor_agent and latest_diagnosis:
+                last_doctor_agent.learn_from_treatment_outcome(
+                    patient_agent,
+                    latest_diagnosis,
+                    treatment_outcome
+                )
+
+            final_department = treatment_record['department_sessions'][-1]['department'] \
+                if treatment_record['department_sessions'] else triage_result['recommended_departments'][0]
             self._update_stats(
-                recommended_dept,
+                final_department,
                 treatment_outcome['is_recovered']
             )
-            
+
             treatment_record['success'] = True
-            
+
         except Exception as e:
             print(f"\n❌ 治疗过程出错: {e}")
             import traceback
             traceback.print_exc()
             treatment_record['success'] = False
             treatment_record['error'] = str(e)
-        
+
         # 保存治疗记录
         self.treatment_records.append(treatment_record)
+        final_department = treatment_record['department_sessions'][-1]['department'] \
+            if treatment_record['department_sessions'] else triage_result['recommended_departments'][0]
         treatment_record['department_case_base_size'] = len(
             self.department_case_bases.get(
-                next((d['id'] for d in self.departments if d['name'] == recommended_dept), None),
+                next((d['id'] for d in self.departments if d['name'] == final_department), None),
                 []
             )
         ) if hasattr(self, 'department_case_bases') else 0
-        
+
         if verbose:
             print("\n" + "=" * 60)
             print("治疗流程完成")
             print("=" * 60)
-        
+
         return treatment_record
     
     def simulate_batch_treatments(
@@ -351,12 +370,14 @@ class AgentHospital:
     def _determine_examinations(
         self,
         patient_agent,
-        doctor
+        doctor,
+        existing_results: Optional[Dict] = None
     ) -> List[str]:
         """
         确定需要的检查项目
         简化版：根据症状推荐基本检查
         """
+        existing_results = existing_results or {}
         examinations = ['血常规']  # 基本检查
         
         symptoms_text = ' '.join(patient_agent.symptoms)
@@ -374,7 +395,116 @@ class AgentHospital:
         if any(keyword in symptoms_text for keyword in ['腹', '肝', '胃', '肠']):
             examinations.append('腹部B超')
         
-        return examinations[:3]  # 最多3个检查
+        # 最多3个检查，且避免重复
+        filtered = []
+        for exam in examinations:
+            if exam not in filtered:
+                filtered.append(exam)
+        return filtered[:3]
+
+    def _run_department_session(
+        self,
+        patient_agent,
+        department_name: str,
+        examination_results: Dict,
+        verbose: bool
+    ) -> Tuple[Dict, Dict, EvolvingDoctorAgent]:
+        """执行单个科室的问诊-检查-诊断流程"""
+        doctor = self.doctor_agents[department_name]
+
+        if verbose:
+            print(f"\n[科室] {department_name} - {doctor.name} 问诊")
+
+        requested_exams = self._determine_examinations(
+            patient_agent,
+            doctor,
+            examination_results
+        )
+
+        new_exams = []
+        for exam_type in requested_exams:
+            if exam_type in examination_results:
+                continue
+            if verbose:
+                print(f"  → 进行检查: {exam_type}")
+            exam_result = self.examination_nurse.conduct_examination(
+                patient_agent,
+                exam_type
+            )
+            examination_results[exam_type] = exam_result
+            new_exams.append(exam_type)
+
+        diagnosis_result = doctor.diagnose_with_evolution(
+            patient_agent,
+            examination_results
+        )
+
+        if verbose:
+            print(f"  → 诊断结果: {diagnosis_result.get('disease', '未知')} (next_action={diagnosis_result.get('next_action', 'continue')})")
+
+        session_record = {
+            'department': department_name,
+            'doctor': doctor.name,
+            'requested_examinations': requested_exams,
+            'new_examinations': new_exams,
+            'diagnosis': diagnosis_result
+        }
+
+        return session_record, diagnosis_result, doctor
+
+    def _run_consultation(
+        self,
+        patient_agent,
+        department_sessions: List[Dict]
+    ) -> Dict:
+        """使用会诊Agent整合多科室意见"""
+        consultation_result = self.consultation_agent.run_consultation(
+            patient_agent,
+            department_sessions
+        )
+
+        final_info = consultation_result.get('final_diagnosis', {})
+        disease = final_info.get('primary') or '待定'
+        differential = final_info.get('secondary', [])
+
+        return {
+            'disease': disease,
+            'diagnosis_reasoning': consultation_result.get('rationale', ''),
+            'differential_diagnosis': differential,
+            'treatment_plan': consultation_result.get('treatment_plan', {}),
+            'confidence': consultation_result.get('confidence', 'medium'),
+            'key_factors': ['multi-department consultation'],
+            'follow_up': consultation_result.get('follow_up', {}),
+            'source': 'consultation',
+            'thinking_process': consultation_result
+        }
+
+    def _enqueue_departments(
+        self,
+        queue: List[str],
+        candidates: List[str],
+        visited: set
+    ):
+        for dept in candidates:
+            if dept in self.doctor_agents and dept not in visited and dept not in queue:
+                queue.append(dept)
+
+    def _pop_next_department(
+        self,
+        queue: List[str],
+        visited: set
+    ) -> Optional[str]:
+        while queue:
+            dept = queue.pop(0)
+            if dept not in visited:
+                return dept
+        return None
+
+    def _get_fallback_department(self, visited: set) -> Optional[str]:
+        for dept in self.doctor_agents.keys():
+            if dept not in visited:
+                return dept
+        return None
     
     def _update_stats(self, department: str, is_successful: bool):
         """更新统计信息"""

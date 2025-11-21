@@ -176,6 +176,12 @@ class EvolvingDoctorAgent(BaseAgent):
         
         # 7. 解析诊断结果
         diagnosis_result = self._parse_diagnosis_response(response)
+
+        self._enrich_diagnosis_actions(
+            diagnosis_result,
+            similar_cases,
+            applicable_rules
+        )
         
         # 8. 添加元数据
         diagnosis_result['doctor_name'] = self.name
@@ -414,6 +420,32 @@ class EvolvingDoctorAgent(BaseAgent):
                 'confidence': 'low',
                 'key_factors': []
             }
+
+    def _enrich_diagnosis_actions(
+        self,
+        diagnosis: Dict,
+        similar_cases: List[Dict],
+        applicable_rules: List[Dict]
+    ):
+        """为诊断结果添加下一步动作建议"""
+        diagnosis.setdefault('next_action', 'continue')
+        diagnosis.setdefault('suggested_departments', [])
+        diagnosis.setdefault('requested_examinations', [])
+
+        # 如果没有相似案例且经验库规则为空，鼓励会诊
+        if not similar_cases and not applicable_rules:
+            diagnosis['next_action'] = 'consult'
+            diagnosis['suggested_departments'] = ['急诊科']
+
+        # 如果诊断置信度低，且存在明显跨科症状，建议转诊
+        confidence = diagnosis.get('confidence', 'low')
+        if confidence == 'low' and diagnosis['next_action'] == 'continue':
+            diagnosis['next_action'] = 'handoff'
+            diagnosis['suggested_departments'] = ['综合内科']
+
+        # 确保字段存在
+        if 'requested_examinations' not in diagnosis:
+            diagnosis['requested_examinations'] = []
     
     def get_stats(self) -> Dict:
         """获取医生的统计信息"""

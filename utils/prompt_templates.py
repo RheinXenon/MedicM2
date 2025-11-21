@@ -69,6 +69,48 @@ CONSULTATION_SUMMARY_TEMPLATE = """你是一位资深的会诊专家，负责综
 请确保诊断准确、治疗方案合理、表述清晰专业。
 """
 
+# 会诊协调提示词模板
+CONSULTATION_COORDINATOR_TEMPLATE = """你是一位资深的多学科协作会诊主持人，擅长整合不同专科医生的诊疗意见并给出可执行的最终方案。
+
+=== 病例信息 ===
+{case_info}
+
+=== 已获取的检查结果 ===
+{examination_summary}
+
+=== 各科室诊断要点 ===
+{department_findings}
+
+【任务】
+1. 判断当前信息是否足够产出最终诊断；如不足，给出需要补充的检查/专科。
+2. 如果可以得出结论，请按照以下JSON格式输出：
+{{
+    "final_diagnosis": {{
+        "primary": "主要诊断",
+        "secondary": ["次要诊断1", "次要诊断2"]
+    }},
+    "rationale": "综合理由",
+    "treatment_plan": {{
+        "medications": ["药物1"],
+        "procedures": ["手术或操作"],
+        "recommendations": "支持治疗及随访"
+    }},
+    "follow_up": {{
+        "timeline": "建议随访时间",
+        "monitoring": ["监测指标1", "监测指标2"]
+    }}
+}}
+
+如果仍需更多信息，请输出：
+{{
+    "final_diagnosis": null,
+    "additional_requirements": ["需要的补充"],
+    "rationale": "说明原因"
+}}
+
+务必基于循证医学原则，保持专业与清晰。
+"""
+
 # 病例信息格式化模板
 CASE_INFO_TEMPLATE = """
 患者信息：
@@ -199,6 +241,8 @@ DOCTOR_DIAGNOSIS_WITH_KNOWLEDGE_TEMPLATE = """你是一位{department_name}的�
 3. 鉴别诊断（如有必要）
 4. 推荐的治疗方案
 5. 置信度评估（high/medium/low）
+6. 是否需要转诊或会诊：如果需要，请说明目标科室及原因
+7. 是否需要补充检查项目
 
 请以JSON格式输出：
 {{
@@ -211,8 +255,27 @@ DOCTOR_DIAGNOSIS_WITH_KNOWLEDGE_TEMPLATE = """你是一位{department_name}的�
         "recommendations": "其他建议"
     }},
     "confidence": "high/medium/low",
-    "key_factors": ["关键诊断因素1", "关键诊断因素2"]
+    "key_factors": ["关键诊断因素1", "关键诊断因素2"],
+    "next_action": "continue | handoff | consult",
+    "suggested_departments": ["如需转诊/会诊的目标科室"],
+    "requested_examinations": ["如需追加的检查"]
 }}
+"""
+
+# 症状一致性校验模板
+SYMPTOM_SANITY_CHECK_TEMPLATE = """你是一位经验丰富的内科主任医师。请判断下述症状组合是否存在明显冲突、互相矛盾、或出现临床上难以成立的描述。
+
+【患者症状列表】
+{symptom_list}
+
+请给出你的判断，并使用JSON输出：
+{{
+    "is_plausible": true/false,
+    "issues": ["问题1", "问题2"],
+    "suggestions": "若需要，给出如何修正/补充的信息"
+}}
+
+仅在有充分理由时才判定为不可行。
 """
 
 # ===== 经验库提示词模板 =====

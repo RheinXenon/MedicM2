@@ -3,9 +3,76 @@
 从CMeIEV2数据集自动生成病人Agent
 """
 import json
+import os
 import random
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
+
 from agents.patient_agent import PatientAgent
+from agents.base_agent import BaseAgent
+from utils.prompt_templates import SYMPTOM_SANITY_CHECK_TEMPLATE
+
+
+class SymptomConsistencyInspector:
+    """基于规则 + LLM 的症状一致性校验器"""
+
+    def __init__(self, llm_agent: Optional[BaseAgent] = None):
+        api_key = os.getenv("OPENAI_API_KEY")
+        if llm_agent:
+            self.llm_agent = llm_agent
+        elif api_key:
+            self.llm_agent = BaseAgent(
+                name="症状校验助手",
+                role="负责校验病人症状是否合理"
+            )
+        else:
+            self.llm_agent = None
+
+        # 简单互斥症状对、禁忌词等，可按需扩展
+        self.conflict_pairs = [
+            ("呼吸停止", "正常交流"),
+            ("意识清醒", "昏迷"),
+            ("死亡", "进食"),
+            ("大量出血", "无不适")
+        ]
+        self.forbidden_terms = ["死亡", "尸斑"]
+
+    def check(self, symptoms: List[str]) -> Tuple[bool, Dict]:
+        issues = []
+
+        for term in self.forbidden_terms:
+            if term in ''.join(symptoms):
+                issues.append(f"包含禁忌词: {term}")
+
+        for a, b in self.conflict_pairs:
+            if a in ''.join(symptoms) and b in ''.join(symptoms):
+                issues.append(f"症状 '{a}' 与 '{b}' 互相矛盾")
+
+        if issues:
+            return False, {"is_plausible": False, "issues": issues}
+
+        if not self.llm_agent:
+            return True, {"is_plausible": True, "issues": []}
+
+        # 触发一次 LLM sanity check（可选）
+        symptom_text = "\n".join(f"- {s}" for s in symptoms)
+        prompt = SYMPTOM_SANITY_CHECK_TEMPLATE.format(symptom_list=symptom_text)
+        response = self.llm_agent.generate_response(
+            prompt,
+            system_message="你是一位负责把关症状可信度的医学专家"
+        )
+
+        try:
+            import json as _json
+            import re
+
+            match = re.search(r'\{.*\}', response, re.DOTALL)
+            if match:
+                payload = _json.loads(match.group())
+                return payload.get("is_plausible", True), payload
+        except Exception as exc:
+            print(f"症状校验解析失败: {exc}")
+
+        return True, {"is_plausible": True, "issues": []}
 
 
 class PatientGenerator:
@@ -24,6 +91,7 @@ class PatientGenerator:
         self.dataset_path = dataset_path
         self.disease_data = []
         self.load_dataset()
+        self.symptom_inspector = SymptomConsistencyInspector()
         
         # 中文姓名库
         self.family_names = [
@@ -101,6 +169,12 @@ class PatientGenerator:
         medical_history = self._generate_medical_history(disease_info, age)
         
         # 5. 创建病人Agent
+        is_valid, sanity_payload = self.symptom_inspector.check(symptoms)
+        if not is_valid:
+            raise ValueError(
+                f"症状组合不合理，疾病={disease}，问题={sanity_payload.get('issues')}"
+            )
+
         patient = PatientAgent(
             name=name,
             age=age,
@@ -109,7 +183,7 @@ class PatientGenerator:
             symptoms=symptoms,
             medical_history=medical_history
         )
-        
+
         return patient
     
     def generate_batch_patients(
