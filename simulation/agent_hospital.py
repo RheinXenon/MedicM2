@@ -463,9 +463,9 @@ class AgentHospital:
             department_sessions
         )
 
-        final_info = consultation_result.get('final_diagnosis', {})
+        final_info = consultation_result.get('final_diagnosis') or {}
         disease = final_info.get('primary') or '待定'
-        differential = final_info.get('secondary', [])
+        differential = final_info.get('secondary') or []
 
         return {
             'disease': disease,

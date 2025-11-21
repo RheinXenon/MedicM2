@@ -158,23 +158,27 @@ class PatientGenerator:
         age = random.randint(age_range[0], age_range[1])
         name = self._generate_name(gender)
         
-        # 3. 提取症状
-        symptoms = disease_info.get('症状', [])
-        if len(symptoms) > 20:
-            # 如果症状太多，随机选择一部分（模拟病人不会表现所有症状）
-            num_symptoms = random.randint(5, min(15, len(symptoms)))
-            symptoms = random.sample(symptoms, num_symptoms)
-        
-        # 4. 生成既往病史
+        # 3. 生成既往病史
         medical_history = self._generate_medical_history(disease_info, age)
         
-        # 5. 创建病人Agent
-        is_valid, sanity_payload = self.symptom_inspector.check(symptoms)
-        if not is_valid:
+        # 4. 多次尝试抽取合理症状
+        base_symptoms = disease_info.get('症状', [])
+        attempt = 0
+        last_payload = None
+        symptoms = []
+        while attempt < 3:
+            attempt += 1
+            symptoms = self._sample_symptoms(base_symptoms)
+            is_valid, sanity_payload = self.symptom_inspector.check(symptoms)
+            if is_valid:
+                break
+            last_payload = sanity_payload
+        else:
             raise ValueError(
-                f"症状组合不合理，疾病={disease}，问题={sanity_payload.get('issues')}"
+                f"症状组合不合理，疾病={disease}，问题={last_payload.get('issues') if last_payload else '未知原因'}"
             )
-
+        
+        # 5. 创建病人Agent
         patient = PatientAgent(
             name=name,
             age=age,
@@ -329,6 +333,19 @@ class PatientGenerator:
             history = ['无特殊既往病史']
         
         return history
+
+    def _sample_symptoms(self, symptoms: List[str]) -> List[str]:
+        """根据原始症状列表随机抽取子集"""
+        if not symptoms:
+            return []
+
+        unique_symptoms = list(dict.fromkeys(symptoms))
+        max_count = min(len(unique_symptoms), 15)
+        if len(unique_symptoms) <= 5:
+            return unique_symptoms
+
+        sample_count = random.randint(5, max_count)
+        return random.sample(unique_symptoms, sample_count)
     
     def get_disease_statistics(self) -> Dict:
         """获取数据集疾病统计信息"""
