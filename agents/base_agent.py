@@ -6,8 +6,11 @@ import time
 from typing import Dict, Optional, List
 from openai import OpenAI
 from dotenv import load_dotenv
+import pathlib
 
-load_dotenv()
+# 强制从项目根目录加载 .env，覆盖系统环境变量
+_project_root = pathlib.Path(__file__).parent.parent
+load_dotenv(_project_root / ".env", override=True)
 
 
 class BaseAgent:
