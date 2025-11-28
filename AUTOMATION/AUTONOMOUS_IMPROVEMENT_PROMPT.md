@@ -277,7 +277,14 @@ def diagnose_with_reflection(self, patient_agent, exam_results):
 
 ---
 
-## 十一、持续运行说明
+## 十一、环境约定
+- 用户在使用windows系统，默认终端为powershell，默认使用miniconda的pytorch虚拟环境
+- 用户希望你不要生成过多的测试脚本和说明文档，因此
+    - 每一次改进/修复最多写一个测试脚本和一个内容精炼的说明文档
+    - 如果隶属于同一内容，则说明文档在此前说明文档的基础上继续修改
+---
+
+## 十二、持续运行说明
 
 用户已设置 99 条 "continue" 队列，因此：
 - 你不需要等待用户确认
